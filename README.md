@@ -124,22 +124,21 @@ flowchart LR
 | 狀態管理 | TanStack Query、Zustand | 管理伺服器資料與前端編輯狀態 |
 | 後端 | Python、FastAPI | 文件解析、AI 編排、任務與下載 API |
 | 任務佇列 | Redis、Celery 或 Dramatiq | 處理長時間的解析與簡報生成工作 |
-| 資料庫 | PostgreSQL | 使用者、專案、生成紀錄、設定與版本 |
-| 開發版資料庫 | SQLite | 單機原型與快速啟動 |
+| 資料庫 | PostgreSQL | 所有環境統一使用，保存使用者、專案、生成紀錄、設定與版本 |
 | 檔案儲存 | 本地檔案系統，之後可換 S3 相容儲存 | 原始文件、縮圖、PPTX、PDF |
 | 本地 AI | Ollama API（首要支援） | 在本地端執行 LLM |
 | 雲端 AI | Provider Adapter | 串接 OpenAI、Anthropic、Gemini 等 API |
 | PPTX 產生 | PptxGenJS，或 Python-pptx 搭配版型引擎 | 建立可編輯的 PowerPoint 物件 |
 | PDF 轉換 | LibreOffice Headless | 將完成的 PPTX 轉成 PDF |
 
-第一版建議採用 `React + FastAPI + PostgreSQL/SQLite + Redis`。Python 生態較適合 PDF、OCR、文件解析與 AI pipeline；PPTX 渲染可以獨立成 Node.js worker 使用 PptxGenJS，或先用 Python-pptx 完成原型。
+第一版採用 `React + FastAPI + PostgreSQL + Redis`。開發、測試與正式環境統一使用 PostgreSQL，開發環境可透過 Docker Compose 啟動，避免 SQLite 與 PostgreSQL 在型別、查詢及 migration 行為上的差異。Python 生態較適合 PDF、OCR、文件解析與 AI pipeline；PPTX 渲染可以獨立成 Node.js worker 使用 PptxGenJS，或先用 Python-pptx 完成原型。
 
 ### 7.2 系統元件
 
 ```mermaid
 flowchart TB
     UI[React Web App] --> API[FastAPI Backend]
-    API --> DB[(PostgreSQL / SQLite)]
+    API --> DB[(PostgreSQL)]
     API --> FS[(Local / S3-compatible Storage)]
     API --> Q[Redis Task Queue]
     Q --> DOC[Document Parser Worker]
@@ -431,7 +430,7 @@ PPT Creator/
 
 - 帳號及權限。
 - API Key 加密與安全設定。
-- PostgreSQL、Redis、物件儲存。
+- PostgreSQL migration、Redis、物件儲存。
 - Docker Compose、監控、備份與部署文件。
 
 ## 19. MVP 驗收標準
