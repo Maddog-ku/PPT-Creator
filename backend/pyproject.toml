@@ -5,7 +5,9 @@ description = "PPT Creator FastAPI service"
 requires-python = ">=3.12"
 dependencies = [
   "asyncpg>=0.30.0,<1",
+  "cryptography>=45.0.0,<47",
   "fastapi>=0.116.0,<1",
+  "httpx>=0.28.0,<1",
   "pydantic-settings>=2.10.0,<3",
   "python-multipart>=0.0.20,<1",
   "sqlalchemy[asyncio]>=2.0.41,<3",
@@ -14,7 +16,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.28.0,<1",
   "pytest>=8.4.0,<9",
   "pytest-asyncio>=1.0.0,<2",
 ]

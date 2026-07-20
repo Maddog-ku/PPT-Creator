@@ -14,18 +14,21 @@ import {
   Fullscreen,
   LayoutTemplate,
   LoaderCircle,
+  KeyRound,
   MonitorUp,
   MoreHorizontal,
+  PlugZap,
   Plus,
   Search,
   Settings,
   Sparkles,
+  Trash2,
   UploadCloud,
   WandSparkles,
   X,
 } from "lucide-react";
 import type { ChangeEvent, DragEvent, FormEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type View = "create" | "generating" | "preview" | "library" | "settings";
 type TemplateId = "editorial" | "midnight" | "paper";
@@ -36,6 +39,95 @@ type SlideData = {
   body: string;
   kind: "cover" | "cards" | "metric" | "roadmap" | "closing";
 };
+
+type GenerationResponse = {
+  title: string;
+  language: string;
+  provider: string;
+  model: string;
+  slides: SlideData[];
+};
+
+type ProviderKind = "ollama" | "openai" | "anthropic" | "gemini" | "openai_compatible";
+
+type AIProviderResponse = {
+  provider: string;
+  model: string;
+  transport: "api";
+};
+
+type AIProviderOption = {
+  id: string;
+  name: string;
+  provider: ProviderKind;
+  model: string;
+  baseUrl?: string;
+  hasApiKey?: boolean;
+  builtIn?: boolean;
+};
+
+type ProviderDraft = {
+  name: string;
+  provider: ProviderKind;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+};
+
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+
+const providerLabels: Record<ProviderKind, string> = {
+  ollama: "本機 API",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  gemini: "Google Gemini",
+  openai_compatible: "OpenAI 相容 API",
+};
+
+const providerBaseUrls: Record<ProviderKind, string> = {
+  ollama: "http://127.0.0.1:11434",
+  openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta",
+  openai_compatible: "http://localhost:1234/v1",
+};
+
+async function fetchProviderOptions(): Promise<AIProviderOption[]> {
+  const options: AIProviderOption[] = [];
+  const [builtInResult, customResult] = await Promise.allSettled([
+    fetch(`${apiBaseUrl}/ai-provider`),
+    fetch(`${apiBaseUrl}/ai-providers`),
+  ]);
+  if (builtInResult.status === "fulfilled" && builtInResult.value.ok) {
+    const provider = await builtInResult.value.json() as AIProviderResponse;
+    options.push({
+      id: "default",
+      name: "本機預設",
+      provider: provider.provider as ProviderKind,
+      model: provider.model,
+      builtIn: true,
+    });
+  }
+  if (customResult.status === "fulfilled" && customResult.value.ok) {
+    const providers = await customResult.value.json() as Array<{
+      id: string;
+      name: string;
+      provider: ProviderKind;
+      base_url: string;
+      model: string;
+      has_api_key: boolean;
+    }>;
+    options.push(...providers.map((provider) => ({
+      id: provider.id,
+      name: provider.name,
+      provider: provider.provider,
+      model: provider.model,
+      baseUrl: provider.base_url,
+      hasApiKey: provider.has_api_key,
+    })));
+  }
+  return options;
+}
 
 const templates: Array<{
   id: TemplateId;
@@ -87,6 +179,16 @@ function makeSlides(topic: string): SlideData[] {
       kind: "closing",
     },
   ];
+}
+
+function slidePoints(body: string, count = 3): string[] {
+  const points = body
+    .split(/[。！？；\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, count);
+  while (points.length < count) points.push(points.at(-1) ?? body);
+  return points;
 }
 
 function BrandMark() {
@@ -159,6 +261,13 @@ function CreateView({
   setFiles,
   template,
   setTemplate,
+  language,
+  setLanguage,
+  slideCount,
+  setSlideCount,
+  providerOptions,
+  selectedProviderId,
+  setSelectedProviderId,
   onGenerate,
 }: {
   topic: string;
@@ -167,7 +276,14 @@ function CreateView({
   setFiles: (files: File[]) => void;
   template: TemplateId;
   setTemplate: (template: TemplateId) => void;
-  onGenerate: (event: FormEvent<HTMLFormElement>) => void;
+  language: string;
+  setLanguage: (language: string) => void;
+  slideCount: number;
+  setSlideCount: (count: number) => void;
+  providerOptions: AIProviderOption[];
+  selectedProviderId: string;
+  setSelectedProviderId: (id: string) => void;
+  onGenerate: (event: FormEvent<HTMLFormElement>) => Promise<void>;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -264,7 +380,7 @@ function CreateView({
         <div className="form-grid">
           <label>
             <span className="field-label">簡報語言</span>
-            <select defaultValue="zh-TW">
+            <select value={language} onChange={(event) => setLanguage(event.target.value)}>
               <option value="zh-TW">繁體中文</option>
               <option value="en">English</option>
               <option value="ja">日本語</option>
@@ -272,7 +388,7 @@ function CreateView({
           </label>
           <label>
             <span className="field-label">預計頁數</span>
-            <select defaultValue="10">
+            <select value={slideCount} onChange={(event) => setSlideCount(Number(event.target.value))}>
               <option value="6">約 6 頁</option>
               <option value="10">約 10 頁</option>
               <option value="15">約 15 頁</option>
@@ -280,6 +396,24 @@ function CreateView({
             </select>
           </label>
         </div>
+
+        <label className="provider-select">
+          <span className="field-label">使用的 AI 模型</span>
+          <select
+            value={selectedProviderId}
+            onChange={(event) => setSelectedProviderId(event.target.value)}
+            disabled={providerOptions.length === 0}
+          >
+            {providerOptions.length === 0 ? (
+              <option value="default">請先到設定新增 AI API</option>
+            ) : providerOptions.map((provider) => (
+              <option key={provider.id} value={provider.id}>
+                {provider.name} · {provider.model}
+              </option>
+            ))}
+          </select>
+          <small>可在設定中加入更多本機或雲端模型 API。</small>
+        </label>
 
         <fieldset className="template-picker">
           <legend className="field-label">選擇視覺風格</legend>
@@ -311,7 +445,7 @@ function CreateView({
   );
 }
 
-function GeneratingView({ progress }: { progress: number }) {
+function GeneratingView({ progress, error, onBack }: { progress: number; error: string | null; onBack: () => void }) {
   const stages = [
     { label: "分析內容與參考資料", at: 10 },
     { label: "整理簡報敘事架構", at: 35 },
@@ -325,25 +459,33 @@ function GeneratingView({ progress }: { progress: number }) {
         <span /><span /><WandSparkles size={30} />
       </div>
       <p className="eyebrow">正在製作你的簡報</p>
-      <h1>把內容變成清楚的故事</h1>
-      <p>我們正在整理重點、安排順序，並為每一頁選擇合適的版面。</p>
+      <h1>{error ? "無法完成這次生成" : "把內容變成清楚的故事"}</h1>
+      <p>{error ?? "AI 服務正在整理重點、安排順序，並為每一頁選擇合適的版面。"}</p>
       <div className="progress-card">
-        <div className="progress-heading"><strong>{progress}%</strong><span>通常不到一分鐘</span></div>
+        <div className="progress-heading"><strong>{progress}%</strong><span>{error ? "請檢查本機服務" : "本地模型生成中"}</span></div>
         <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>
-        <ol>
-          {stages.map((stage) => (
-            <li key={stage.label} className={progress >= stage.at ? "done" : progress + 18 >= stage.at ? "current" : ""}>
-              <span>{progress >= stage.at ? <Check size={14} /> : <LoaderCircle size={14} />}</span>
-              {stage.label}
-            </li>
-          ))}
-        </ol>
+        {error ? (
+          <div className="generation-error">
+            <strong>請確認後端 API 與 AI 服務都已啟動</strong>
+            <button className="quiet-button" onClick={onBack}>返回設定</button>
+          </div>
+        ) : (
+          <ol>
+            {stages.map((stage) => (
+              <li key={stage.label} className={progress >= stage.at ? "done" : progress + 18 >= stage.at ? "current" : ""}>
+                <span>{progress >= stage.at ? <Check size={14} /> : <LoaderCircle size={14} />}</span>
+                {stage.label}
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
     </main>
   );
 }
 
 function SlideCanvas({ slide, topic, compact = false }: { slide: SlideData; topic: string; compact?: boolean }) {
+  const points = slidePoints(slide.body);
   return (
     <div className={`slide-canvas slide-${slide.kind} ${compact ? "compact" : ""}`}>
       <div className="slide-chrome">
@@ -366,8 +508,8 @@ function SlideCanvas({ slide, topic, compact = false }: { slide: SlideData; topi
           <span className="slide-eyebrow">{slide.eyebrow}</span>
           <h2>{slide.title}</h2>
           <div className="insight-cards">
-            {["受眾", "價值", "行動"].map((label, index) => (
-              <div key={label}><span>0{index + 1}</span><strong>{label}</strong><p>{["先理解誰需要這份簡報", "說清楚改變帶來的好處", "讓下一步具體而且可執行"][index]}</p></div>
+            {["重點一", "重點二", "重點三"].map((label, index) => (
+              <div key={label}><span>0{index + 1}</span><strong>{label}</strong><p>{points[index]}</p></div>
             ))}
           </div>
         </div>
@@ -383,8 +525,8 @@ function SlideCanvas({ slide, topic, compact = false }: { slide: SlideData; topi
           <span className="slide-eyebrow">{slide.eyebrow}</span>
           <h2>{slide.title}</h2>
           <div className="roadmap-line">
-            {["聚焦", "驗證", "擴展"].map((label, index) => (
-              <div key={label}><span>{index + 1}</span><strong>{label}</strong><small>{["定義問題與成功標準", "推出第一版並取得回饋", "建立可重複的成長流程"][index]}</small></div>
+            {["第一階段", "第二階段", "第三階段"].map((label, index) => (
+              <div key={label}><span>{index + 1}</span><strong>{label}</strong><small>{points[index]}</small></div>
             ))}
           </div>
         </div>
@@ -528,14 +670,117 @@ function LibraryView({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-function SettingsView() {
+function SettingsView({
+  providerOptions,
+  reloadProviderOptions,
+}: {
+  providerOptions: AIProviderOption[];
+  reloadProviderOptions: () => Promise<void>;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [connections, setConnections] = useState<Record<string, { status: "idle" | "testing" | "connected" | "failed"; message: string }>>({});
+  const [draft, setDraft] = useState<ProviderDraft>({
+    name: "",
+    provider: "openai",
+    baseUrl: providerBaseUrls.openai,
+    model: "",
+    apiKey: "",
+  });
+
+  const setProviderKind = (provider: ProviderKind) => {
+    setDraft((current) => ({ ...current, provider, baseUrl: providerBaseUrls[provider] }));
+  };
+
+  const saveProvider = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setFormError(null);
+    try {
+      const response = await fetch(`${apiBaseUrl}/ai-providers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: draft.name,
+          provider: draft.provider,
+          base_url: draft.baseUrl,
+          model: draft.model,
+          api_key: draft.apiKey || null,
+        }),
+      });
+      const result = await response.json() as { detail?: string };
+      if (!response.ok) throw new Error(result.detail || "無法儲存 AI 設定");
+      await reloadProviderOptions();
+      setDraft({ name: "", provider: "openai", baseUrl: providerBaseUrls.openai, model: "", apiKey: "" });
+      setShowForm(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "無法儲存 AI 設定");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const testProvider = async (provider: AIProviderOption) => {
+    setConnections((current) => ({ ...current, [provider.id]: { status: "testing", message: "測試中" } }));
+    try {
+      const path = provider.builtIn ? "/ai-provider/test" : `/ai-providers/${provider.id}/test`;
+      const response = await fetch(`${apiBaseUrl}${path}`, { method: "POST" });
+      const result = await response.json() as { connected?: boolean; error?: string | null };
+      if (!response.ok || !result.connected) throw new Error(result.error || "連線失敗");
+      setConnections((current) => ({ ...current, [provider.id]: { status: "connected", message: "已連線" } }));
+    } catch (error) {
+      setConnections((current) => ({
+        ...current,
+        [provider.id]: { status: "failed", message: error instanceof Error ? error.message : "連線失敗" },
+      }));
+    }
+  };
+
+  const deleteProvider = async (provider: AIProviderOption) => {
+    if (!window.confirm(`確定要刪除「${provider.name}」嗎？`)) return;
+    const response = await fetch(`${apiBaseUrl}/ai-providers/${provider.id}`, { method: "DELETE" });
+    if (response.ok) await reloadProviderOptions();
+  };
+
   return (
     <main className="secondary-view settings-view">
-      <div className="section-heading"><div><p className="eyebrow">偏好設定</p><h1>AI 與輸出設定</h1><p>設定執行方式、預設語言與下載格式。</p></div></div>
+      <div className="section-heading"><div><p className="eyebrow">偏好設定</p><h1>AI 模型設定</h1><p>加入多個模型 API，測試後可在建立簡報時自由選擇。</p></div></div>
       <section className="settings-card">
-        <div className="settings-section-heading"><span><Sparkles size={18} /></span><div><h2>AI 執行方式</h2><p>預設在本機執行，不會自動切換到雲端服務。</p></div></div>
-        <div className="setting-row"><div><strong>本地模型</strong><small>Ollama · llama3.2:latest</small></div><span className="connection-badge">尚未連線</span><button className="quiet-button">設定連線</button></div>
-        <div className="setting-row"><div><strong>雲端模型</strong><small>使用自己的 API 金鑰</small></div><span className="muted-badge">未啟用</span><button className="quiet-button">新增服務</button></div>
+        <div className="settings-section-heading provider-heading">
+          <span><Sparkles size={18} /></span>
+          <div><h2>已串接的 AI 模型</h2><p>API Key 會加密保存，設定頁不會再次顯示明文。</p></div>
+          <button className="quiet-button" onClick={() => setShowForm((current) => !current)}><Plus size={15} /> 新增模型</button>
+        </div>
+
+        {showForm && (
+          <form className="provider-form" onSubmit={saveProvider}>
+            <label><span>設定名稱</span><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="例如：公司 OpenAI" required /></label>
+            <label><span>API 類型</span><select value={draft.provider} onChange={(event) => setProviderKind(event.target.value as ProviderKind)}>{Object.entries(providerLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="wide"><span>Base URL</span><input value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} type="url" required /></label>
+            <label><span>模型名稱</span><input value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} placeholder="輸入 API 提供的模型 ID" required /></label>
+            <label><span>API Key {draft.provider === "ollama" || draft.provider === "openai_compatible" ? "（選填）" : ""}</span><div className="secret-field"><KeyRound size={15} /><input value={draft.apiKey} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} type="password" autoComplete="new-password" required={draft.provider !== "ollama" && draft.provider !== "openai_compatible"} /></div></label>
+            {formError && <p className="provider-form-error">{formError}</p>}
+            <div className="provider-form-actions"><button type="button" className="quiet-button" onClick={() => setShowForm(false)}>取消</button><button className="primary-button" disabled={saving}>{saving ? "儲存中" : "儲存設定"}</button></div>
+          </form>
+        )}
+
+        <div className="provider-list">
+          {providerOptions.map((provider) => {
+            const connection = connections[provider.id] ?? { status: "idle", message: "尚未測試" };
+            return (
+              <div className="setting-row provider-row" key={provider.id}>
+                <div className="provider-copy"><strong>{provider.name}</strong><small>{providerLabels[provider.provider] ?? provider.provider} · {provider.model}</small><small>{provider.builtIn ? "系統預設" : provider.hasApiKey ? "API Key 已加密保存" : "未設定 API Key"}</small></div>
+                <span className={`connection-badge ${connection.status}`}>{connection.message}</span>
+                <div className="provider-actions">
+                  <button className="quiet-button" onClick={() => testProvider(provider)} disabled={connection.status === "testing"}><PlugZap size={14} /> {connection.status === "testing" ? "測試中" : "測試"}</button>
+                  {!provider.builtIn && <button className="icon-button danger-button" onClick={() => deleteProvider(provider)} aria-label={`刪除 ${provider.name}`}><Trash2 size={15} /></button>}
+                </div>
+              </div>
+            );
+          })}
+          {providerOptions.length === 0 && <p className="empty-provider">目前無法讀取 AI API，請確認後端服務與 PostgreSQL 已啟動。</p>}
+        </div>
       </section>
       <section className="settings-card">
         <div className="settings-section-heading"><span><LayoutTemplate size={18} /></span><div><h2>簡報預設值</h2><p>建立新簡報時會自動帶入以下設定。</p></div></div>
@@ -550,28 +795,72 @@ export default function Home() {
   const [topic, setTopic] = useState("2026 年產品策略提案");
   const [files, setFiles] = useState<File[]>([]);
   const [template, setTemplate] = useState<TemplateId>("editorial");
+  const [language, setLanguage] = useState("zh-TW");
+  const [slideCount, setSlideCount] = useState(10);
+  const [providerOptions, setProviderOptions] = useState<AIProviderOption[]>([]);
+  const [selectedProviderId, setSelectedProviderId] = useState("default");
   const [progress, setProgress] = useState(0);
-  const slides = makeSlides(topic);
+  const [slides, setSlides] = useState<SlideData[]>(() => makeSlides(topic));
+  const [generationError, setGenerationError] = useState<string | null>(null);
+
+  const reloadProviderOptions = useCallback(async () => {
+    const options = await fetchProviderOptions();
+    setProviderOptions(options);
+    setSelectedProviderId((current) => options.some((provider) => provider.id === current) ? current : options[0]?.id ?? "default");
+  }, []);
 
   useEffect(() => {
-    if (view !== "generating") return;
-    const timer = window.setInterval(() => {
-      setProgress((current) => {
-        const next = Math.min(100, current + Math.max(3, Math.round((100 - current) / 7)));
-        if (next === 100) {
-          window.clearInterval(timer);
-          window.setTimeout(() => setView("preview"), 450);
-        }
-        return next;
-      });
-    }, 180);
-    return () => window.clearInterval(timer);
-  }, [view]);
+    let active = true;
+    void fetchProviderOptions().then((options) => {
+      if (!active) return;
+      setProviderOptions(options);
+      setSelectedProviderId(options[0]?.id ?? "default");
+    });
+    return () => { active = false; };
+  }, []);
 
-  const startGeneration = (event: FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    if (view !== "generating" || generationError) return;
+    const timer = window.setInterval(() => {
+      setProgress((current) => Math.min(88, current + Math.max(1, Math.round((90 - current) / 10))));
+    }, 650);
+    return () => window.clearInterval(timer);
+  }, [generationError, view]);
+
+  const startGeneration = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setProgress(7);
+    setGenerationError(null);
     setView("generating");
+    try {
+      const textSources = await Promise.all(
+        files
+          .filter((file) => /\.(txt|md)$/i.test(file.name))
+          .map(async (file) => `# ${file.name}\n${await file.text()}`),
+      );
+      const response = await fetch(`${apiBaseUrl}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          language,
+          slide_count: slideCount,
+          template,
+          source_text: textSources.join("\n\n").slice(0, 60_000) || null,
+          provider_id: selectedProviderId === "default" ? null : selectedProviderId,
+        }),
+      });
+      const result = await response.json() as GenerationResponse & { detail?: string };
+      if (!response.ok) throw new Error(result.detail || `生成服務回傳 ${response.status}`);
+      setSlides(result.slides);
+      setProgress(100);
+      window.setTimeout(() => setView("preview"), 450);
+    } catch (error) {
+      const message = error instanceof TypeError
+        ? "無法連線 FastAPI。請確認 http://localhost:8000 已啟動。"
+        : error instanceof Error ? error.message : "生成簡報時發生錯誤";
+      setGenerationError(message);
+    }
   };
 
   const changeView = (next: View) => {
@@ -583,11 +872,11 @@ export default function Home() {
       <SideNavigation view={view} onChange={changeView} />
       <div className="app-content">
         {view !== "preview" && <AppHeader onCreate={() => setView("create")} />}
-        {view === "create" && <CreateView topic={topic} setTopic={setTopic} files={files} setFiles={setFiles} template={template} setTemplate={setTemplate} onGenerate={startGeneration} />}
-        {view === "generating" && <GeneratingView progress={progress} />}
+        {view === "create" && <CreateView topic={topic} setTopic={setTopic} files={files} setFiles={setFiles} template={template} setTemplate={setTemplate} language={language} setLanguage={setLanguage} slideCount={slideCount} setSlideCount={setSlideCount} providerOptions={providerOptions} selectedProviderId={selectedProviderId} setSelectedProviderId={setSelectedProviderId} onGenerate={startGeneration} />}
+        {view === "generating" && <GeneratingView progress={progress} error={generationError} onBack={() => setView("create")} />}
         {view === "preview" && <PreviewView topic={topic} slides={slides} onBack={() => setView("create")} />}
         {view === "library" && <LibraryView onCreate={() => setView("create")} />}
-        {view === "settings" && <SettingsView />}
+        {view === "settings" && <SettingsView providerOptions={providerOptions} reloadProviderOptions={reloadProviderOptions} />}
       </div>
     </div>
   );
