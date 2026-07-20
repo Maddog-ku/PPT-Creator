@@ -11,8 +11,12 @@ class Settings(BaseSettings):
     web_origin: str = "http://localhost:3000"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "gpt-oss:20b"
+    ollama_image_model: str = "x/z-image-turbo"
     ollama_timeout_seconds: float = 300.0
     ai_config_secret: str = "ppt-creator-local-development-secret"
+    presentation_storage_dir: str = "/data/presentations"
+    job_poll_seconds: float = 1.0
+    job_cancel_poll_seconds: float = 0.75
 
     model_config = SettingsConfigDict(
         env_file=".env",

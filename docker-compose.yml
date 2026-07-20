@@ -1,4 +1,32 @@
 services:
+  model-init:
+    image: curlimages/curl:8.16.0
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gpt-oss:20b}
+      OLLAMA_IMAGE_MODEL: ${OLLAMA_IMAGE_MODEL:-x/z-image-turbo}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until curl -fsS http://host.docker.internal:11434/api/version >/dev/null; do sleep 2; done
+        echo "Preparing text model: $${OLLAMA_MODEL}"
+        curl -fsS http://host.docker.internal:11434/api/pull -H 'Content-Type: application/json' -d "{\"model\":\"$${OLLAMA_MODEL}\",\"stream\":false}"
+        echo "Preparing image model: $${OLLAMA_IMAGE_MODEL}"
+        curl -fsS http://host.docker.internal:11434/api/pull -H 'Content-Type: application/json' -d "{\"model\":\"$${OLLAMA_IMAGE_MODEL}\",\"stream\":false}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
   postgres:
     image: postgres:17-alpine
     environment:
@@ -22,15 +50,49 @@ services:
       WEB_ORIGIN: http://localhost:3000
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: gpt-oss:20b
+      OLLAMA_IMAGE_MODEL: x/z-image-turbo
       OLLAMA_TIMEOUT_SECONDS: 300
       AI_CONFIG_SECRET: ${AI_CONFIG_SECRET:-ppt-creator-local-development-secret}
+      PRESENTATION_STORAGE_DIR: /data/presentations
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      model-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - presentation_data:/data/presentations
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ppt_creator:ppt_creator@postgres:5432/ppt_creator
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: gpt-oss:20b
+      OLLAMA_IMAGE_MODEL: x/z-image-turbo
+      OLLAMA_TIMEOUT_SECONDS: 300
+      AI_CONFIG_SECRET: ${AI_CONFIG_SECRET:-ppt-creator-local-development-secret}
+      PRESENTATION_STORAGE_DIR: /data/presentations
+      JOB_POLL_SECONDS: 1
+      JOB_CANCEL_POLL_SECONDS: 0.75
+    depends_on:
+      api:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - presentation_data:/data/presentations
 
 volumes:
   postgres_data:
+  presentation_data:

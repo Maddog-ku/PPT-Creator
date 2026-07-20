@@ -21,7 +21,8 @@ test("server-renders the PPT Creator application", async () => {
   const html = await response.text();
   assert.match(html, /<title>PPT Creator｜把內容變成好看的簡報<\/title>/i);
   assert.match(html, /把內容整理成/);
-  assert.match(html, /產生簡報預覽/);
+  assert.match(html, /先產生簡報大綱/);
+  assert.match(html, /任務中心/);
   assert.match(html, /下載前完整預覽/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });

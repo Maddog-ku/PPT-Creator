@@ -1,14 +1,105 @@
 import json
+import base64
 from typing import Any, Literal
 from urllib.parse import quote
 
 import httpx
 
-from ..schemas import GeneratedDeck, GenerationRequest
-from .base import AIProviderError, generation_messages, parse_generated_deck
+from ..schemas import GeneratedDeck, GenerationRequest, PresentationOutline
+from .base import (
+    AIProviderError,
+    exact_array_schema,
+    generation_messages,
+    outline_messages,
+    parse_generated_deck,
+    parse_generated_outline,
+)
 
 
 RemoteProviderType = Literal["openai", "anthropic", "gemini", "openai_compatible"]
+
+
+OPENAI_DECK_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "title": {"type": "string"},
+        "language": {"type": "string"},
+        "slides": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "eyebrow": {"type": "string"},
+                    "title": {"type": "string"},
+                    "body": {"type": "string"},
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "cover",
+                            "section",
+                            "cards",
+                            "split",
+                            "metric",
+                            "comparison",
+                            "roadmap",
+                            "quote",
+                            "closing",
+                        ],
+                    },
+                    "visual_prompt": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "eyebrow",
+                    "title",
+                    "body",
+                    "kind",
+                    "visual_prompt",
+                ],
+            },
+        },
+    },
+    "required": ["title", "language", "slides"],
+}
+
+
+OPENAI_OUTLINE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "title": {"type": "string"},
+        "language": {"type": "string"},
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "eyebrow": {"type": "string"},
+                    "title": {"type": "string"},
+                    "objective": {"type": "string"},
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "cover",
+                            "section",
+                            "cards",
+                            "split",
+                            "metric",
+                            "comparison",
+                            "roadmap",
+                            "quote",
+                            "closing",
+                        ],
+                    },
+                },
+                "required": ["eyebrow", "title", "objective", "kind"],
+            },
+        },
+    },
+    "required": ["title", "language", "items"],
+}
 
 
 class RemoteAIProvider:
@@ -51,7 +142,12 @@ class RemoteAIProvider:
 
     async def generate_deck(self, request: GenerationRequest) -> GeneratedDeck:
         system, user = generation_messages(request)
-        schema = GeneratedDeck.model_json_schema()
+        schema = exact_array_schema(
+            GeneratedDeck.model_json_schema(), "slides", request.slide_count
+        )
+        openai_schema = exact_array_schema(
+            OPENAI_DECK_SCHEMA, "slides", request.slide_count
+        )
         if self.provider_type in {"openai", "openai_compatible"}:
             payload: dict[str, Any] = {
                 "model": self.model,
@@ -64,7 +160,11 @@ class RemoteAIProvider:
             if self.provider_type == "openai":
                 payload["response_format"] = {
                     "type": "json_schema",
-                    "json_schema": {"name": "presentation", "strict": True, "schema": schema},
+                    "json_schema": {
+                        "name": "presentation",
+                        "strict": True,
+                        "schema": openai_schema,
+                    },
                 }
             else:
                 payload["response_format"] = {"type": "json_object"}
@@ -104,6 +204,142 @@ class RemoteAIProvider:
                 for part in (((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
             )
         return parse_generated_deck(content, request)
+
+    async def generate_outline(
+        self, request: GenerationRequest
+    ) -> PresentationOutline:
+        system, user = outline_messages(request)
+        schema = exact_array_schema(
+            PresentationOutline.model_json_schema(), "items", request.slide_count
+        )
+        openai_schema = exact_array_schema(
+            OPENAI_OUTLINE_SCHEMA, "items", request.slide_count
+        )
+        if self.provider_type in {"openai", "openai_compatible"}:
+            payload: dict[str, Any] = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                "temperature": 0.2,
+            }
+            if self.provider_type == "openai":
+                payload["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "presentation_outline",
+                        "strict": True,
+                        "schema": openai_schema,
+                    },
+                }
+            else:
+                payload["response_format"] = {"type": "json_object"}
+            data = await self._request(
+                "POST", f"{self.base_url}/chat/completions", payload
+            )
+            content = (
+                ((data.get("choices") or [{}])[0].get("message") or {}).get(
+                    "content"
+                )
+                or ""
+            )
+        elif self.provider_type == "anthropic":
+            data = await self._request(
+                "POST",
+                f"{self.base_url}/messages",
+                {
+                    "model": self.model,
+                    "system": f"{system}\nJSON Schema：{json.dumps(schema, ensure_ascii=False)}",
+                    "messages": [{"role": "user", "content": user}],
+                    "max_tokens": min(
+                        16_384, max(4_096, request.slide_count * 256)
+                    ),
+                    "temperature": 0.2,
+                },
+            )
+            content = "".join(
+                str(item.get("text", ""))
+                for item in data.get("content", [])
+                if item.get("type") == "text"
+            )
+        else:
+            model = quote(self.model.removeprefix("models/"), safe="-._")
+            data = await self._request(
+                "POST",
+                self._gemini_url(f"/models/{model}:generateContent"),
+                {
+                    "systemInstruction": {"parts": [{"text": system}]},
+                    "contents": [{"role": "user", "parts": [{"text": user}]}],
+                    "generationConfig": {
+                        "temperature": 0.2,
+                        "responseMimeType": "application/json",
+                    },
+                },
+            )
+            content = "".join(
+                str(part.get("text", ""))
+                for part in (
+                    ((data.get("candidates") or [{}])[0].get("content") or {}).get(
+                        "parts"
+                    )
+                    or []
+                )
+            )
+        return parse_generated_outline(content, request)
+
+    async def generate_image(self, prompt: str, *, image_model: str) -> str:
+        if self.provider_type not in {"openai", "openai_compatible"}:
+            raise AIProviderError("此 Provider 尚不支援圖片生成")
+        data = await self._request(
+            "POST",
+            f"{self.base_url}/images/generations",
+            {
+                "model": image_model,
+                "prompt": prompt,
+                "n": 1,
+                "size": "1024x1024",
+            },
+        )
+        result = (data.get("data") or [{}])[0]
+        encoded = result.get("b64_json")
+        if encoded:
+            return f"data:image/png;base64,{encoded}"
+        image_url = result.get("url")
+        if image_url:
+            return await self._download_image(str(image_url))
+        raise AIProviderError("圖片 API 沒有回傳圖片資料")
+
+    async def generate_image_with_tool(self, prompt: str) -> str:
+        if self.provider_type != "openai":
+            raise AIProviderError("只有 OpenAI Responses API 支援圖片生成工具")
+        data = await self._request(
+            "POST",
+            f"{self.base_url}/responses",
+            {
+                "model": self.model,
+                "input": prompt,
+                "tools": [{"type": "image_generation", "size": "1536x1024"}],
+            },
+        )
+        for item in data.get("output", []):
+            if item.get("type") == "image_generation_call" and item.get("result"):
+                return f"data:image/png;base64,{item['result']}"
+        raise AIProviderError("OpenAI 模型沒有回傳圖片生成結果")
+
+    async def _download_image(self, url: str) -> str:
+        owns_client = self._client is None
+        client = self._client or httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds))
+        try:
+            response = await client.get(url)
+            response.raise_for_status()
+            mime = response.headers.get("content-type", "image/png").split(";")[0]
+            return f"data:{mime};base64,{base64.b64encode(response.content).decode()}"
+        except (httpx.HTTPError, ValueError) as exc:
+            raise AIProviderError("無法下載圖片 API 的生成結果") from exc
+        finally:
+            if owns_client:
+                await client.aclose()
 
     def _gemini_url(self, path: str) -> str:
         return f"{self.base_url}{path}"
