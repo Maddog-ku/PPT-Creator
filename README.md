@@ -50,9 +50,10 @@ npm run dev
 ### 2. 啟動後端 API
 
 ```bash
-/Users/dog/sidepj/venv/PPT-Creator/.venv/bin/pip install -r requirements.txt
-cd backend
-/Users/dog/sidepj/venv/PPT-Creator/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+export PPT_CREATOR_VENV="/path/to/your/venv"
+source "$PPT_CREATOR_VENV/bin/activate"
+pip install -r requirements.txt
+uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
 API 文件位於 `http://localhost:8000/docs`。AI 服務與 PostgreSQL 的連線設定可由 `.env.example` 建立 `.env` 後調整。
@@ -77,7 +78,7 @@ docker compose down
 npm run lint
 npx tsc --noEmit
 npm test
-/Users/dog/sidepj/venv/PPT-Creator/.venv/bin/python -m unittest discover -s backend/tests -v
+python -m unittest discover -s backend/tests -v
 ```
 
 ## 目前限制
