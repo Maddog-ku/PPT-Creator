@@ -41,7 +41,14 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-Hant">
+    <html lang="zh-Hant" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=JSON.parse(localStorage.getItem("ppt-creator-preferences")||"{}");var m=p.colorMode==="dark"?"dark":"light";var l=p.locale==="en"?"en":"zh-Hant";document.documentElement.dataset.colorMode=m;document.documentElement.lang=l}catch(e){document.documentElement.dataset.colorMode="light"}})();`,
+          }}
+        />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body>
     </html>
   );

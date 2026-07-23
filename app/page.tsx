@@ -18,8 +18,10 @@ import {
   GripVertical,
   History,
   LayoutTemplate,
+  Languages,
   LoaderCircle,
   KeyRound,
+  Moon,
   MonitorUp,
   PlugZap,
   Plus,
@@ -30,6 +32,7 @@ import {
   Save,
   Settings,
   Sparkles,
+  Sun,
   Trash2,
   UploadCloud,
   WandSparkles,
@@ -55,6 +58,13 @@ import {
   templateCatalog,
 } from "./templates";
 import type { TemplateId } from "./templates";
+import {
+  defaultPreferences,
+  readPreferences,
+  translate,
+  writePreferences,
+} from "./preferences";
+import type { AppLocale, AppPreferences } from "./preferences";
 
 type View = "create" | "generating" | "outline" | "editor" | "preview" | "library" | "jobs" | "settings";
 
@@ -299,16 +309,17 @@ function BrandMark() {
   );
 }
 
-function SideNavigation({ view, compact, onChange }: { view: View; compact: boolean; onChange: (view: View) => void }) {
+function SideNavigation({ view, compact, locale, onChange }: { view: View; compact: boolean; locale: AppLocale; onChange: (view: View) => void }) {
+  const tr = (text: string) => translate(locale, text);
   const items = [
-    { id: "create" as const, label: "建立簡報", icon: Plus },
-    { id: "library" as const, label: "我的簡報", icon: FolderOpen },
-    { id: "jobs" as const, label: "任務中心", icon: Clock3 },
-    { id: "settings" as const, label: "設定", icon: Settings },
+    { id: "create" as const, label: tr("建立簡報"), icon: Plus },
+    { id: "library" as const, label: tr("我的簡報"), icon: FolderOpen },
+    { id: "jobs" as const, label: tr("任務中心"), icon: Clock3 },
+    { id: "settings" as const, label: tr("設定"), icon: Settings },
   ];
 
   return (
-    <aside className={`side-navigation ${compact ? "compact" : ""}`} aria-label={compact ? "主要導覽（已收合）" : "主要導覽"}>
+    <aside className={`side-navigation ${compact ? "compact" : ""}`} aria-label={tr(compact ? "主要導覽（已收合）" : "主要導覽")}>
       <button className="side-logo" onClick={() => onChange("create")} aria-label="PPT Creator 首頁">
         <BrandMark />
       </button>
@@ -326,14 +337,15 @@ function SideNavigation({ view, compact, onChange }: { view: View; compact: bool
           </button>
         ))}
       </nav>
-      <button className="side-help" aria-label="使用說明" title="使用說明">
+      <button className="side-help" aria-label={tr("使用說明")} title={tr("使用說明")}>
         <CircleHelp size={20} />
       </button>
     </aside>
   );
 }
 
-function AppHeader({ onCreate }: { onCreate: () => void }) {
+function AppHeader({ locale, onCreate }: { locale: AppLocale; onCreate: () => void }) {
+  const tr = (text: string) => translate(locale, text);
   return (
     <header className="app-header">
       <div className="mobile-brand">
@@ -341,14 +353,14 @@ function AppHeader({ onCreate }: { onCreate: () => void }) {
         <strong>PPT Creator</strong>
       </div>
       <div className="header-actions">
-        <button className="icon-button" aria-label="搜尋">
+        <button className="icon-button" aria-label={tr("搜尋")}>
           <Search size={19} />
         </button>
         <button className="quiet-button" onClick={onCreate}>
           <Plus size={17} />
-          新增簡報
+          {tr("新增簡報")}
         </button>
-        <button className="avatar" aria-label="使用者選單">DC</button>
+        <button className="avatar" aria-label={tr("使用者選單")}>DC</button>
       </div>
     </header>
   );
@@ -375,6 +387,7 @@ function CreateView({
   imageProviderId,
   setImageProviderId,
   sourceStatuses,
+  locale,
   onGenerate,
 }: {
   topic: string;
@@ -397,8 +410,10 @@ function CreateView({
   imageProviderId: string;
   setImageProviderId: (id: string) => void;
   sourceStatuses: Record<string, SourceExtractionItem>;
+  locale: AppLocale;
   onGenerate: (event: FormEvent<HTMLFormElement>) => Promise<void>;
 }) {
+  const tr = (text: string) => translate(locale, text);
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -424,32 +439,32 @@ function CreateView({
   return (
     <main className="create-view">
       <section className="create-intro">
-        <div className="eyebrow"><WandSparkles size={15} /> AI 簡報工作室</div>
-        <h1>把內容整理成<br /><span>一份好看的簡報。</span></h1>
-        <p>輸入主題或加入參考資料，我們會先整理架構，再讓你逐頁確認完整成果。</p>
-        <div className="trust-row" aria-label="產品特點">
-          <span><Check size={14} /> 可編輯 PPTX</span>
-          <span><Check size={14} /> 下載前完整預覽</span>
-          <span><Check size={14} /> 支援本地模型</span>
+        <div className="eyebrow"><WandSparkles size={15} /> {tr("AI 簡報工作室")}</div>
+        <h1>{tr("讓每個想法")}<br /><span>{tr("都值得被看見")}</span></h1>
+        <p>{tr("輸入主題或加入參考資料，我們會先整理架構，再讓你逐頁確認完整成果。")}</p>
+        <div className="trust-row" aria-label={tr("產品特點")}>
+          <span><Check size={14} /> {tr("可編輯 PPTX")}</span>
+          <span><Check size={14} /> {tr("下載前完整預覽")}</span>
+          <span><Check size={14} /> {tr("支援本地模型")}</span>
         </div>
       </section>
 
       <form className="creator-card" onSubmit={onGenerate}>
-        <div className="step-label"><span>1</span> 告訴我們簡報要說什麼</div>
-        <label className="field-label" htmlFor="presentation-topic">簡報主題與需求</label>
+        <div className="step-label"><span>1</span> {tr("告訴我們簡報要說什麼")}</div>
+        <label className="field-label" htmlFor="presentation-topic">{tr("簡報主題與需求")}</label>
         <div className="topic-field">
           <textarea
             id="presentation-topic"
             value={topic}
             onChange={(event) => setTopic(event.target.value)}
-            placeholder="例如：為管理團隊製作一份 2026 年產品策略提案，重點放在市場機會、三項優先計畫與執行時程。"
+            placeholder={tr("例如：為管理團隊製作一份 2026 年產品策略提案，重點放在市場機會、三項優先計畫與執行時程。")}
             rows={5}
             required
           />
           <span className="character-count">{topic.length} / 1,500</span>
         </div>
 
-        <label className="field-label">參考資料 <small>選填，最多 8 個檔案</small></label>
+        <label className="field-label">{tr("參考資料")} <small>{tr("選填，最多 8 個檔案")}</small></label>
         <div
           className={`dropzone ${dragging ? "dragging" : ""}`}
           onDragEnter={() => setDragging(true)}
@@ -469,14 +484,14 @@ function CreateView({
             multiple
             accept=".pdf,.pptx,.txt,.md"
             onChange={handleFiles}
-            aria-label="選擇參考檔案"
+            aria-label={tr("選擇參考檔案")}
           />
           <span className="upload-icon"><UploadCloud size={22} /></span>
-          <div><strong>拖曳檔案到這裡</strong><small>或點擊選擇 PDF、PPTX、TXT</small></div>
+          <div><strong>{tr("拖曳檔案到這裡")}</strong><small>{tr("或點擊選擇 PDF、PPTX、TXT")}</small></div>
         </div>
 
         {files.length > 0 && (
-          <ul className="file-list" aria-label="已加入的檔案">
+          <ul className="file-list" aria-label={tr("已加入的檔案")}>
             {files.map((file) => (
               <li key={`${file.name}-${file.size}`}>
                 <FileText size={17} />
@@ -487,7 +502,7 @@ function CreateView({
                     <small className={`source-status ${sourceStatuses[file.name].status}`}>
                       {sourceStatuses[file.name].status === "success"
                         ? `已解析 ${sourceStatuses[file.name].char_count.toLocaleString()} 字元`
-                        : sourceStatuses[file.name].error || "解析失敗"}
+                        : sourceStatuses[file.name].error || tr("解析失敗")}
                     </small>
                   )}
                 </span>
@@ -503,15 +518,15 @@ function CreateView({
 
         <div className="form-grid">
           <label>
-            <span className="field-label">簡報語言</span>
+            <span className="field-label">{tr("簡報語言")}</span>
             <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-              <option value="zh-TW">繁體中文</option>
+              <option value="zh-TW">{tr("繁體中文")}</option>
               <option value="en">English</option>
               <option value="ja">日本語</option>
             </select>
           </label>
           <label>
-            <span className="field-label">預計頁數</span>
+            <span className="field-label">{tr("預計頁數")}</span>
             <select
               value={customSlideCount ? "custom" : slideCount}
               onChange={(event) => {
@@ -524,11 +539,11 @@ function CreateView({
                 }
               }}
             >
-              <option value="6">約 6 頁</option>
-              <option value="10">約 10 頁</option>
-              <option value="15">約 15 頁</option>
-              <option value="20">約 20 頁</option>
-              <option value="custom">自訂頁數</option>
+              <option value="6">{tr("約 6 頁")}</option>
+              <option value="10">{tr("約 10 頁")}</option>
+              <option value="15">{tr("約 15 頁")}</option>
+              <option value="20">{tr("約 20 頁")}</option>
+              <option value="custom">{tr("自訂頁數")}</option>
             </select>
             {customSlideCount && (
               <span className="custom-slide-count">
@@ -540,31 +555,31 @@ function CreateView({
                   value={slideCount}
                   onChange={(event) => setSlideCount(event.target.value)}
                   placeholder="3–50"
-                  aria-label="自訂簡報頁數"
+                  aria-label={tr("自訂頁數")}
                   required
                 />
-                <span>頁</span>
+                <span>{tr("頁")}</span>
               </span>
             )}
           </label>
         </div>
 
         <label className="provider-select">
-          <span className="field-label">使用的 AI 模型</span>
+          <span className="field-label">{tr("使用的 AI 模型")}</span>
           <select
             value={selectedProviderId}
             onChange={(event) => setSelectedProviderId(event.target.value)}
             disabled={providerOptions.every((provider) => !isTextProvider(provider))}
           >
             {providerOptions.every((provider) => !isTextProvider(provider)) ? (
-              <option value="default">請先到設定新增 AI API</option>
+              <option value="default">{tr("請先到設定新增 AI API")}</option>
             ) : providerOptions.filter(isTextProvider).map((provider) => (
               <option key={provider.id} value={provider.id}>
                 {provider.name} · {provider.model}
               </option>
             ))}
           </select>
-          <small>可在設定中加入更多本機或雲端模型 API。</small>
+          <small>{tr("可在設定中加入更多本機或雲端模型 API。")}</small>
         </label>
 
         <div className="image-generation-field">
@@ -574,26 +589,26 @@ function CreateView({
               checked={generateImages}
               onChange={(event) => setGenerateImages(event.target.checked)}
             />
-            <span><strong>在簡報中生成圖片</strong><small>優先使用本機圖片 API，最多生成 2 張，避免雲端費用。</small></span>
+            <span><strong>{tr("在簡報中生成圖片")}</strong><small>{tr("優先使用本機圖片 API，最多生成 2 張，避免雲端費用。")}</small></span>
           </label>
           {generateImages && (
             <label className="provider-select image-provider-select">
-              <span className="field-label">圖片生成模型</span>
+              <span className="field-label">{tr("圖片生成模型")}</span>
               <select value={imageProviderId} onChange={(event) => setImageProviderId(event.target.value)} required>
-                <option value="">請選擇圖片模型</option>
+                <option value="">{tr("請選擇圖片模型")}</option>
                 {providerOptions.filter(isImageProvider).map((provider) => (
                   <option key={provider.id} value={provider.id}>
                     {provider.name} · {provider.provider === "ollama" ? `${provider.imageModel}・本機免額度` : provider.provider === "stable_diffusion" ? "本機生成・免雲端額度" : `${provider.imageModel || `${provider.model} 圖片工具`}・雲端可能計費`}
                   </option>
                 ))}
               </select>
-              {providerOptions.every((provider) => !isImageProvider(provider)) && <small>請先到設定新增本機 Stable Diffusion API。</small>}
+              {providerOptions.every((provider) => !isImageProvider(provider)) && <small>{tr("請先到設定新增本機 Stable Diffusion API。")}</small>}
             </label>
           )}
         </div>
 
         <fieldset className="template-picker">
-          <legend className="field-label">選擇視覺風格</legend>
+          <legend className="field-label">{tr("選擇視覺風格")}</legend>
           <div className="template-options">
             {templates.map((item) => (
               <label key={item.id} className={template === item.id ? "selected" : ""}>
@@ -605,7 +620,7 @@ function CreateView({
                   onChange={() => setTemplate(item.id)}
                 />
                 <span className={`template-swatch ${item.id}`} aria-hidden="true"><i /><i /><i /></span>
-                <span><strong>{item.name}</strong><small>{item.description}</small></span>
+                <span><strong>{tr(item.name)}</strong><small>{tr(item.description)}</small></span>
                 {template === item.id && <Check className="template-check" size={15} />}
               </label>
             ))}
@@ -613,21 +628,22 @@ function CreateView({
         </fieldset>
 
         <button className="primary-button generate-button" type="submit">
-          先產生簡報大綱
+          {tr("先產生簡報大綱")}
           <ArrowRight size={18} />
         </button>
-        <p className="form-note">先在網站完整確認每一頁，確認後才會開放下載。</p>
+        <p className="form-note">{tr("先在網站完整確認每一頁，確認後才會開放下載。")}</p>
       </form>
     </main>
   );
 }
 
-function GeneratingView({ progress, error, sourceStatuses, onBack, onCancel, stage }: { progress: number; error: string | null; sourceStatuses: Record<string, SourceExtractionItem>; onBack: () => void; onCancel: () => void; stage: string }) {
+function GeneratingView({ progress, error, sourceStatuses, locale, onBack, onCancel, stage }: { progress: number; error: string | null; sourceStatuses: Record<string, SourceExtractionItem>; locale: AppLocale; onBack: () => void; onCancel: () => void; stage: string }) {
+  const tr = (text: string) => translate(locale, text);
   const stages = [
-    { label: "分析內容與參考資料", at: 10 },
-    { label: "整理簡報敘事架構", at: 35 },
-    { label: "建立逐頁內容", at: 58 },
-    { label: "套用版型並檢查版面", at: 82 },
+    { label: tr("分析內容與參考資料"), at: 10 },
+    { label: tr("整理簡報敘事架構"), at: 35 },
+    { label: tr("建立逐頁內容"), at: 58 },
+    { label: tr("套用版型並檢查版面"), at: 82 },
   ];
 
   return (
@@ -635,16 +651,16 @@ function GeneratingView({ progress, error, sourceStatuses, onBack, onCancel, sta
       <div className="generation-orbit" aria-hidden="true">
         <span /><span /><WandSparkles size={30} />
       </div>
-      <p className="eyebrow">正在製作你的簡報</p>
-      <h1>{error ? "無法完成這次生成" : "把內容變成清楚的故事"}</h1>
-      <p>{error ?? "AI 服務正在整理重點、安排順序，並為每一頁選擇合適的版面。"}</p>
+      <p className="eyebrow">{tr("正在製作你的簡報")}</p>
+      <h1>{tr(error ? "無法完成這次生成" : "把內容變成清楚的故事")}</h1>
+      <p>{error ?? tr("AI 服務正在整理重點、安排順序，並為每一頁選擇合適的版面。")}</p>
       <div className="progress-card">
-        <div className="progress-heading"><strong>{progress}%</strong><span>{error ? "請檢查本機服務" : stage || "等待背景任務"}</span></div>
+        <div className="progress-heading"><strong>{progress}%</strong><span>{error ? tr("請檢查本機服務") : stage || tr("等待背景任務")}</span></div>
         <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>
         {error ? (
           <div className="generation-error">
-            <strong>請確認後端 API 與 AI 服務都已啟動</strong>
-            <button className="quiet-button" onClick={onBack}>返回設定</button>
+            <strong>{tr("請確認後端 API 與 AI 服務都已啟動")}</strong>
+            <button className="quiet-button" onClick={onBack}>{tr("返回設定")}</button>
           </div>
         ) : (
           <ol>
@@ -656,10 +672,10 @@ function GeneratingView({ progress, error, sourceStatuses, onBack, onCancel, sta
             ))}
           </ol>
         )}
-        {!error && <button className="quiet-button generation-cancel" onClick={onCancel}>取消這次生成</button>}
+        {!error && <button className="quiet-button generation-cancel" onClick={onCancel}>{tr("取消這次生成")}</button>}
         {Object.values(sourceStatuses).length > 0 && (
           <div className="generation-sources">
-            <strong>參考資料解析結果</strong>
+            <strong>{tr("參考資料解析結果")}</strong>
             {Object.values(sourceStatuses).map((item) => (
               <span className={item.status} key={item.filename}>
                 {item.status === "success" ? <Check size={13} /> : <X size={13} />}
@@ -673,7 +689,8 @@ function GeneratingView({ progress, error, sourceStatuses, onBack, onCancel, sta
   );
 }
 
-function OutlineView({ outline, onConfirm, onBack }: { outline: PresentationOutline; onConfirm: (outline: PresentationOutline) => Promise<void>; onBack: () => void }) {
+function OutlineView({ outline, locale, onConfirm, onBack }: { outline: PresentationOutline; locale: AppLocale; onConfirm: (outline: PresentationOutline) => Promise<void>; onBack: () => void }) {
+  const tr = (text: string) => translate(locale, text);
   const [draft, setDraft] = useState(outline);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -726,14 +743,14 @@ function OutlineView({ outline, onConfirm, onBack }: { outline: PresentationOutl
   return (
     <main className="outline-view">
       <header className="outline-header">
-        <button className="quiet-button" onClick={onBack}><ArrowLeft size={17} /> 返回建立頁</button>
-        <div><p className="eyebrow">生成前確認</p><h1>先把故事架構排好</h1><p>調整標題、順序與每頁目的，確認後才會生成完整內容。</p></div>
-        <div className="outline-summary"><strong>{draft.items.length}</strong><span>頁簡報</span></div>
+        <button className="quiet-button" onClick={onBack}><ArrowLeft size={17} /> {tr("返回建立頁")}</button>
+        <div><p className="eyebrow">{tr("生成前確認")}</p><h1>{tr("先把故事架構排好")}</h1><p>{tr("調整標題、順序與每頁目的，確認後才會生成完整內容。")}</p></div>
+        <div className="outline-summary"><strong>{draft.items.length}</strong><span>{tr("頁簡報")}</span></div>
       </header>
       <section className="outline-title-card">
-        <label><span>簡報名稱</span><input value={draft.title} maxLength={180} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
+        <label><span>{tr("簡報名稱")}</span><input value={draft.title} maxLength={180} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
       </section>
-      <section className="outline-list" aria-label="簡報大綱">
+      <section className="outline-list" aria-label={tr("簡報大綱")}>
         {draft.items.map((item, index) => {
           const fixed = index === 0 || index === draft.items.length - 1;
           return (
@@ -741,11 +758,11 @@ function OutlineView({ outline, onConfirm, onBack }: { outline: PresentationOutl
               <div className="outline-number">{String(index + 1).padStart(2, "0")}</div>
               <div className="outline-fields">
                 <div className="outline-field-row">
-                  <label><span>眉標</span><input value={item.eyebrow} maxLength={80} onChange={(event) => updateItem(index, { eyebrow: event.target.value })} /></label>
-                  <label><span>頁型</span><select value={item.kind} disabled={fixed} onChange={(event) => updateItem(index, { kind: event.target.value as SlideData["kind"] })}>{slideKindOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
+                  <label><span>{tr("眉標")}</span><input value={item.eyebrow} maxLength={80} onChange={(event) => updateItem(index, { eyebrow: event.target.value })} /></label>
+                  <label><span>{tr("頁型")}</span><select value={item.kind} disabled={fixed} onChange={(event) => updateItem(index, { kind: event.target.value as SlideData["kind"] })}>{slideKindOptions.map((option) => <option value={option.value} key={option.value}>{tr(option.label)}</option>)}</select></label>
                 </div>
-                <label><span>頁面標題</span><input value={item.title} maxLength={120} onChange={(event) => updateItem(index, { title: event.target.value })} /></label>
-                <label><span>這一頁要傳達什麼</span><textarea value={item.objective} maxLength={300} rows={2} onChange={(event) => updateItem(index, { objective: event.target.value })} /></label>
+                <label><span>{tr("頁面標題")}</span><input value={item.title} maxLength={120} onChange={(event) => updateItem(index, { title: event.target.value })} /></label>
+                <label><span>{tr("這一頁要傳達什麼")}</span><textarea value={item.objective} maxLength={300} rows={2} onChange={(event) => updateItem(index, { objective: event.target.value })} /></label>
               </div>
               <div className="outline-actions">
                 <button onClick={() => moveItem(index, -1)} disabled={fixed || index === 1} aria-label={`將第 ${index + 1} 頁上移`}><ChevronUp size={16} /></button>
@@ -757,8 +774,8 @@ function OutlineView({ outline, onConfirm, onBack }: { outline: PresentationOutl
         })}
       </section>
       <footer className="outline-footer">
-        <button className="quiet-button" onClick={addItem} disabled={draft.items.length >= 50}><Plus size={16} /> 新增內容頁</button>
-        <div>{error && <span className="outline-error">{error}</span>}<button className="primary-button" onClick={() => void confirm()} disabled={saving || !draft.title.trim()}>{saving ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}{saving ? "正在建立任務" : "確認大綱並生成內容"}</button></div>
+        <button className="quiet-button" onClick={addItem} disabled={draft.items.length >= 50}><Plus size={16} /> {tr("新增內容頁")}</button>
+        <div>{error && <span className="outline-error">{error}</span>}<button className="primary-button" onClick={() => void confirm()} disabled={saving || !draft.title.trim()}>{saving ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}{tr(saving ? "正在建立任務" : "確認大綱並生成內容")}</button></div>
       </footer>
     </main>
   );
@@ -913,6 +930,7 @@ function EditorView({
   slides,
   template,
   presentationId,
+  locale,
   onSave,
   onRestore,
   onCancel,
@@ -921,10 +939,12 @@ function EditorView({
   slides: SlideData[];
   template: TemplateId;
   presentationId: string | null;
+  locale: AppLocale;
   onSave: (topic: string, slides: SlideData[]) => Promise<void>;
   onRestore: (revision: number) => Promise<void>;
   onCancel: () => void;
 }) {
+  const tr = (text: string) => translate(locale, text);
   const [draftTopic, setDraftTopic] = useState(topic);
   const [draftSlides, setDraftSlides] = useState(slides);
   const [active, setActive] = useState(0);
@@ -1023,7 +1043,7 @@ function EditorView({
   };
 
   const cancelEditing = () => {
-    if (dirty && !window.confirm("尚有未儲存的修改，確定要離開嗎？")) return;
+    if (dirty && !window.confirm(locale === "en" ? "You have unsaved changes. Leave anyway?" : "尚有未儲存的修改，確定要離開嗎？")) return;
     onCancel();
   };
 
@@ -1098,23 +1118,23 @@ function EditorView({
   return (
     <main className="editor-view">
       <header className="editor-toolbar">
-        <button className="quiet-button" onClick={cancelEditing}><ArrowLeft size={17} /> 返回預覽</button>
+        <button className="quiet-button" onClick={cancelEditing}><ArrowLeft size={17} /> {tr("返回預覽")}</button>
         <div className="editor-title">
-          <strong>簡報編輯工作台</strong>
-          <span className={dirty ? "dirty" : "saved"}>{dirty ? "有未儲存修改" : "內容已儲存"}</span>
+          <strong>{tr("簡報編輯工作台")}</strong>
+          <span className={dirty ? "dirty" : "saved"}>{tr(dirty ? "有未儲存修改" : "內容已儲存")}</span>
         </div>
         <div className="editor-toolbar-actions">
-          <button className="quiet-button" onClick={() => void openHistory()} disabled={!presentationId}><History size={16} /> 版本紀錄</button>
+          <button className="quiet-button" onClick={() => void openHistory()} disabled={!presentationId}><History size={16} /> {tr("版本紀錄")}</button>
           <button className="primary-button" onClick={() => void saveChanges()} disabled={!dirty || saving || !draftTopic.trim()}>
             {saving ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}
-            {saving ? "正在更新預覽" : "儲存並更新預覽"}
+            {tr(saving ? "正在更新預覽" : "儲存並更新預覽")}
           </button>
         </div>
       </header>
 
       <div className="editor-workspace">
-        <aside className="editor-slide-list" aria-label="可編輯投影片列表">
-          <div className="editor-list-heading"><span>投影片</span><strong>{draftSlides.length} / 50</strong></div>
+        <aside className="editor-slide-list" aria-label={tr("可編輯投影片列表")}>
+          <div className="editor-list-heading"><span>{tr("投影片")}</span><strong>{draftSlides.length} / 50</strong></div>
           {draftSlides.map((slide, index) => (
             <div
               className={`editor-thumbnail ${active === index ? "active" : ""}`}
@@ -1134,90 +1154,90 @@ function EditorView({
               <GripVertical size={14} aria-hidden="true" />
             </div>
           ))}
-          <button className="editor-add-slide" onClick={addSlide} disabled={draftSlides.length >= 50}><Plus size={15} /> 新增投影片</button>
+          <button className="editor-add-slide" onClick={addSlide} disabled={draftSlides.length >= 50}><Plus size={15} /> {tr("新增投影片")}</button>
         </aside>
 
         <section className="editor-stage">
-          <div className="editor-stage-meta"><span>即時內容預覽</span><span>第 {active + 1} 頁</span></div>
+          <div className="editor-stage-meta"><span>{tr("即時內容預覽")}</span><span>{locale === "en" ? `Slide ${active + 1}` : `第 ${active + 1} 頁`}</span></div>
           <div className="slide-frame">{activeSlide && <SlideCanvas slide={activeSlide} topic={draftTopic} template={template} index={active} />}</div>
         </section>
 
         <aside className="editor-panel">
           <div className="editor-panel-heading">
-            <div><p className="eyebrow">PAGE {String(active + 1).padStart(2, "0")}</p><h2>編輯投影片內容</h2></div>
+            <div><p className="eyebrow">PAGE {String(active + 1).padStart(2, "0")}</p><h2>{tr("編輯投影片內容")}</h2></div>
             <div className="editor-order-actions">
-              <button onClick={() => moveSlide(active, active - 1)} disabled={active === 0} aria-label="向前移動"><ChevronUp size={16} /></button>
-              <button onClick={() => moveSlide(active, active + 1)} disabled={active === draftSlides.length - 1} aria-label="向後移動"><ChevronDown size={16} /></button>
+              <button onClick={() => moveSlide(active, active - 1)} disabled={active === 0} aria-label={tr("向前移動")}><ChevronUp size={16} /></button>
+              <button onClick={() => moveSlide(active, active + 1)} disabled={active === draftSlides.length - 1} aria-label={tr("向後移動")}><ChevronDown size={16} /></button>
             </div>
           </div>
 
-          <label className="editor-field"><span>簡報名稱</span><input value={draftTopic} maxLength={180} onChange={(event) => setDraftTopic(event.target.value)} /></label>
+          <label className="editor-field"><span>{tr("簡報名稱")}</span><input value={draftTopic} maxLength={180} onChange={(event) => setDraftTopic(event.target.value)} /></label>
           {activeSlide && (
             <>
-              <label className="editor-field"><span>頁面類型</span><select value={activeSlide.kind} onChange={(event) => updateActiveSlide({ kind: event.target.value as SlideData["kind"], items: undefined, metric: null, comparison: null })}>{slideKindOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
-              <label className="editor-field"><span>眉標</span><input value={activeSlide.eyebrow} maxLength={80} onChange={(event) => updateActiveSlide({ eyebrow: event.target.value })} /><small>{activeSlide.eyebrow.length} / 80</small></label>
-              <label className="editor-field"><span>標題</span><textarea value={activeSlide.title} maxLength={120} rows={3} onChange={(event) => updateActiveSlide({ title: event.target.value })} /><small>{activeSlide.title.length} / 120</small></label>
-              <label className="editor-field"><span>內文</span><textarea value={activeSlide.body} maxLength={400} rows={7} onChange={(event) => updateActiveSlide({ body: event.target.value })} /><small>{activeSlide.body.length} / 400</small></label>
+              <label className="editor-field"><span>{tr("頁面類型")}</span><select value={activeSlide.kind} onChange={(event) => updateActiveSlide({ kind: event.target.value as SlideData["kind"], items: undefined, metric: null, comparison: null })}>{slideKindOptions.map((item) => <option value={item.value} key={item.value}>{tr(item.label)}</option>)}</select></label>
+              <label className="editor-field"><span>{tr("眉標")}</span><input value={activeSlide.eyebrow} maxLength={80} onChange={(event) => updateActiveSlide({ eyebrow: event.target.value })} /><small>{activeSlide.eyebrow.length} / 80</small></label>
+              <label className="editor-field"><span>{tr("標題")}</span><textarea value={activeSlide.title} maxLength={120} rows={3} onChange={(event) => updateActiveSlide({ title: event.target.value })} /><small>{activeSlide.title.length} / 120</small></label>
+              <label className="editor-field"><span>{tr("內文")}</span><textarea value={activeSlide.body} maxLength={400} rows={7} onChange={(event) => updateActiveSlide({ body: event.target.value })} /><small>{activeSlide.body.length} / 400</small></label>
               {(activeSlide.kind === "cards" || activeSlide.kind === "roadmap") && (
                 <div className="editor-structure-section">
-                  <div><strong>{activeSlide.kind === "cards" ? "卡片內容" : "階段內容"}</strong><small>這些欄位會直接呈現在版型中</small></div>
+                  <div><strong>{tr(activeSlide.kind === "cards" ? "卡片內容" : "階段內容")}</strong><small>{tr("這些欄位會直接呈現在版型中")}</small></div>
                   {itemsFrom(activeSlide).map((item, itemIndex) => (
                     <fieldset key={`${item.label}-${itemIndex}`}>
-                      <legend>項目 {itemIndex + 1}</legend>
-                      <label className="editor-field"><span>標籤</span><input value={item.label} maxLength={40} onChange={(event) => updateActiveItem(itemIndex, { label: event.target.value })} /></label>
-                      <label className="editor-field"><span>小標題</span><input value={item.title} maxLength={80} onChange={(event) => updateActiveItem(itemIndex, { title: event.target.value })} /></label>
-                      <label className="editor-field"><span>說明</span><textarea value={item.body} maxLength={180} rows={3} onChange={(event) => updateActiveItem(itemIndex, { body: event.target.value })} /></label>
+                      <legend>{tr("項目")} {itemIndex + 1}</legend>
+                      <label className="editor-field"><span>{tr("標籤")}</span><input value={item.label} maxLength={40} onChange={(event) => updateActiveItem(itemIndex, { label: event.target.value })} /></label>
+                      <label className="editor-field"><span>{tr("小標題")}</span><input value={item.title} maxLength={80} onChange={(event) => updateActiveItem(itemIndex, { title: event.target.value })} /></label>
+                      <label className="editor-field"><span>{tr("說明")}</span><textarea value={item.body} maxLength={180} rows={3} onChange={(event) => updateActiveItem(itemIndex, { body: event.target.value })} /></label>
                     </fieldset>
                   ))}
                 </div>
               )}
               {activeSlide.kind === "metric" && (
                 <div className="editor-structure-section">
-                  <div><strong>數據內容</strong><small>數值必須來自可信資料</small></div>
-                  <label className="editor-field"><span>主要數值</span><input value={metricFrom(activeSlide).value} maxLength={40} onChange={(event) => updateActiveMetric({ value: event.target.value })} /></label>
-                  <label className="editor-field"><span>數值標籤</span><input value={metricFrom(activeSlide).label} maxLength={80} onChange={(event) => updateActiveMetric({ label: event.target.value })} /></label>
-                  <label className="editor-field"><span>補充脈絡</span><textarea value={metricFrom(activeSlide).context} maxLength={180} rows={3} onChange={(event) => updateActiveMetric({ context: event.target.value })} /></label>
+                  <div><strong>{tr("數據內容")}</strong><small>{tr("數值必須來自可信資料")}</small></div>
+                  <label className="editor-field"><span>{tr("主要數值")}</span><input value={metricFrom(activeSlide).value} maxLength={40} onChange={(event) => updateActiveMetric({ value: event.target.value })} /></label>
+                  <label className="editor-field"><span>{tr("數值標籤")}</span><input value={metricFrom(activeSlide).label} maxLength={80} onChange={(event) => updateActiveMetric({ label: event.target.value })} /></label>
+                  <label className="editor-field"><span>{tr("補充脈絡")}</span><textarea value={metricFrom(activeSlide).context} maxLength={180} rows={3} onChange={(event) => updateActiveMetric({ context: event.target.value })} /></label>
                 </div>
               )}
               {activeSlide.kind === "comparison" && (
                 <div className="editor-structure-section">
-                  <div><strong>比較內容</strong><small>左右欄與最後結論</small></div>
+                  <div><strong>{tr("比較內容")}</strong><small>{tr("左右欄與最後結論")}</small></div>
                   {(["left", "right"] as const).map((side) => {
                     const column = comparisonFrom(activeSlide)[side];
                     return (
                       <fieldset key={side}>
-                        <legend>{side === "left" ? "左欄" : "右欄"}</legend>
-                        <label className="editor-field"><span>標籤</span><input value={column.label} maxLength={40} onChange={(event) => updateActiveComparison(side, { label: event.target.value })} /></label>
-                        <label className="editor-field"><span>欄位標題</span><input value={column.title} maxLength={80} onChange={(event) => updateActiveComparison(side, { title: event.target.value })} /></label>
-                        <label className="editor-field"><span>內容</span><textarea value={column.body} maxLength={180} rows={3} onChange={(event) => updateActiveComparison(side, { body: event.target.value })} /></label>
+                        <legend>{tr(side === "left" ? "左欄" : "右欄")}</legend>
+                        <label className="editor-field"><span>{tr("標籤")}</span><input value={column.label} maxLength={40} onChange={(event) => updateActiveComparison(side, { label: event.target.value })} /></label>
+                        <label className="editor-field"><span>{tr("欄位標題")}</span><input value={column.title} maxLength={80} onChange={(event) => updateActiveComparison(side, { title: event.target.value })} /></label>
+                        <label className="editor-field"><span>{tr("內容")}</span><textarea value={column.body} maxLength={180} rows={3} onChange={(event) => updateActiveComparison(side, { body: event.target.value })} /></label>
                       </fieldset>
                     );
                   })}
-                  <label className="editor-field"><span>比較結論</span><textarea value={comparisonFrom(activeSlide).callout} maxLength={160} rows={3} onChange={(event) => updateActiveComparison("callout", event.target.value)} /></label>
+                  <label className="editor-field"><span>{tr("比較結論")}</span><textarea value={comparisonFrom(activeSlide).callout} maxLength={160} rows={3} onChange={(event) => updateActiveComparison("callout", event.target.value)} /></label>
                 </div>
               )}
-              {activeSlide.image_data && <button className="quiet-button editor-remove-image" onClick={() => updateActiveSlide({ image_data: null })}><Trash2 size={14} /> 移除這頁圖片</button>}
+              {activeSlide.image_data && <button className="quiet-button editor-remove-image" onClick={() => updateActiveSlide({ image_data: null })}><Trash2 size={14} /> {tr("移除這頁圖片")}</button>}
             </>
           )}
 
           <div className="editor-slide-actions">
-            <button className="quiet-button" onClick={duplicateSlide} disabled={draftSlides.length >= 50}><Copy size={14} /> 複製此頁</button>
-            <button className="danger-action" onClick={deleteSlide} disabled={draftSlides.length <= 3}><Trash2 size={14} /> 刪除此頁</button>
+            <button className="quiet-button" onClick={duplicateSlide} disabled={draftSlides.length >= 50}><Copy size={14} /> {tr("複製此頁")}</button>
+            <button className="danger-action" onClick={deleteSlide} disabled={draftSlides.length <= 3}><Trash2 size={14} /> {tr("刪除此頁")}</button>
           </div>
           {saveError && <p className="editor-save-error">{saveError}</p>}
-          <p className="editor-help">文字修改與排序不會呼叫 AI。儲存後才會重新產生正式 PPTX、PDF 與逐頁預覽。</p>
+          <p className="editor-help">{tr("文字修改與排序不會呼叫 AI。儲存後才會重新產生正式 PPTX、PDF 與逐頁預覽。")}</p>
         </aside>
       </div>
       {showHistory && (
         <div className="history-backdrop" role="presentation" onMouseDown={() => setShowHistory(false)}>
-          <aside className="history-drawer" aria-label="簡報版本紀錄" onMouseDown={(event) => event.stopPropagation()}>
+          <aside className="history-drawer" aria-label={tr("版本紀錄")} onMouseDown={(event) => event.stopPropagation()}>
             <header>
-              <div><p className="eyebrow">VERSION HISTORY</p><h2>版本紀錄</h2><p>查看過去內容，還原時不會覆蓋原有版本。</p></div>
-              <button className="icon-button" onClick={() => setShowHistory(false)} aria-label="關閉版本紀錄"><X size={18} /></button>
+              <div><p className="eyebrow">VERSION HISTORY</p><h2>{tr("版本紀錄")}</h2><p>{tr("查看過去內容，還原時不會覆蓋原有版本。")}</p></div>
+              <button className="icon-button" onClick={() => setShowHistory(false)} aria-label={tr("關閉版本紀錄")}><X size={18} /></button>
             </header>
-            {historyLoading && <p className="history-message"><LoaderCircle className="spin" size={17} /> 正在讀取版本…</p>}
+            {historyLoading && <p className="history-message"><LoaderCircle className="spin" size={17} /> {tr("正在讀取版本…")}</p>}
             {historyError && <p className="history-message error">{historyError}</p>}
-            {!historyLoading && versions.length === 0 && !historyError && <p className="history-message">目前還沒有版本紀錄。</p>}
+            {!historyLoading && versions.length === 0 && !historyError && <p className="history-message">{tr("目前還沒有版本紀錄。")}</p>}
             <div className="history-content">
               <div className="history-list">
                 {versions.map((version) => {
@@ -1226,7 +1246,7 @@ function EditorView({
                     : versionReasonLabels[version.change_reason] ?? version.change_reason;
                   return (
                     <button className={selectedVersion?.revision === version.revision ? "active" : ""} key={version.id} onClick={() => void loadVersionDetail(version.revision)}>
-                      <span>版本 {version.revision}</span>
+                      <span>{tr("版本")} {version.revision}</span>
                       <strong>{reason}</strong>
                       <small>{version.slide_count} 頁 · {new Intl.DateTimeFormat("zh-TW", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(version.created_at))}</small>
                     </button>
@@ -1236,10 +1256,10 @@ function EditorView({
               <div className="history-preview">
                 {selectedVersion ? (
                   <>
-                    <div className="history-preview-heading"><div><span>版本 {selectedVersion.revision}</span><h3>{selectedVersion.title}</h3></div><button className="primary-button" onClick={() => void restoreVersion()} disabled={restoring}>{restoring ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}{restoring ? "正在還原" : "還原此版本"}</button></div>
+                    <div className="history-preview-heading"><div><span>{tr("版本")} {selectedVersion.revision}</span><h3>{selectedVersion.title}</h3></div><button className="primary-button" onClick={() => void restoreVersion()} disabled={restoring}>{restoring ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}{tr(restoring ? "正在還原" : "還原此版本")}</button></div>
                     <ol>{selectedVersion.content.slides.map((slide, index) => <li key={slide.id}><span>{String(index + 1).padStart(2, "0")}</span><div><strong>{slide.title}</strong><small>{slide.eyebrow}</small></div></li>)}</ol>
                   </>
-                ) : !historyLoading && <p className="history-message">選擇版本以查看內容。</p>}
+                ) : !historyLoading && <p className="history-message">{tr("選擇版本以查看內容。")}</p>}
               </div>
             </div>
           </aside>
@@ -1257,6 +1277,7 @@ function PreviewView({
   assets,
   initiallyConfirmed,
   rendering,
+  locale,
   onTemplateChange,
   onBack,
 }: {
@@ -1267,9 +1288,11 @@ function PreviewView({
   assets: RenderAssets | null;
   initiallyConfirmed: boolean;
   rendering: boolean;
+  locale: AppLocale;
   onTemplateChange: (template: TemplateId) => Promise<void>;
   onBack: () => void;
 }) {
+  const tr = (text: string) => translate(locale, text);
   const [active, setActive] = useState(0);
   const [confirmed, setConfirmed] = useState(initiallyConfirmed);
   const [animationsEnabled, setAnimationsEnabled] = useState(false);
@@ -1309,38 +1332,38 @@ function PreviewView({
   return (
     <main className="preview-view">
       <header className="preview-toolbar">
-        <button className="quiet-button" onClick={onBack}><ArrowLeft size={17} /> 返回修改</button>
-        <div className="preview-title"><strong>{topic || "未命名簡報"}</strong><span><Check size={13} /> 已完成預覽</span></div>
+        <button className="quiet-button" onClick={onBack}><ArrowLeft size={17} /> {tr("返回修改")}</button>
+        <div className="preview-title"><strong>{topic || tr("未命名簡報")}</strong><span><Check size={13} /> {tr("已完成預覽")}</span></div>
         <div className="preview-actions">
           <label className="preview-template-select">
             <LayoutTemplate size={16} />
-            <select value={template} onChange={(event) => void switchTemplate(event.target.value as TemplateId)} disabled={rendering} aria-label="切換簡報模板">
-              {templates.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+            <select value={template} onChange={(event) => void switchTemplate(event.target.value as TemplateId)} disabled={rendering} aria-label={tr("切換簡報模板")}>
+              {templates.map((item) => <option value={item.id} key={item.id}>{tr(item.name)}</option>)}
             </select>
           </label>
           <button
             className={`animation-button ${animationsEnabled ? "active" : ""}`}
             onClick={() => setAnimationsEnabled((current) => !current)}
             aria-pressed={animationsEnabled}
-            title="切換網站進場動畫與 PPTX 淡入轉場"
+            title={tr("切換網站進場動畫與 PPTX 淡入轉場")}
           >
-            <Play size={16} /> {animationsEnabled ? "動畫已開啟" : "加入動畫"}
+            <Play size={16} /> {tr(animationsEnabled ? "動畫已開啟" : "加入動畫")}
           </button>
-          <button className="icon-button" onClick={toggleFullscreen} aria-label={theaterMode ? "退出全螢幕" : "全螢幕預覽"} title={theaterMode ? "退出全螢幕" : "全螢幕預覽"}><Fullscreen size={18} /></button>
+          <button className="icon-button" onClick={toggleFullscreen} aria-label={tr(theaterMode ? "退出全螢幕" : "全螢幕預覽")} title={tr(theaterMode ? "退出全螢幕" : "全螢幕預覽")}><Fullscreen size={18} /></button>
           {confirmed && assets ? (
             <>
-              <a className="download-button secondary-download" href={resolveApiUrl(assets.pdf_url)}><Download size={17} /> 下載 PDF</a>
-              <a className="download-button" href={`${resolveApiUrl(assets.pptx_url)}${animationsEnabled ? "?animations=true" : ""}`}><Download size={17} /> 下載 PPTX</a>
+              <a className="download-button secondary-download" href={resolveApiUrl(assets.pdf_url)}><Download size={17} /> {tr("下載 PDF")}</a>
+              <a className="download-button" href={`${resolveApiUrl(assets.pptx_url)}${animationsEnabled ? "?animations=true" : ""}`}><Download size={17} /> {tr("下載 PPTX")}</a>
             </>
           ) : (
-            <button className="download-button" disabled><Download size={17} /> 確認後下載</button>
+            <button className="download-button" disabled><Download size={17} /> {tr("確認後下載")}</button>
           )}
         </div>
       </header>
 
       <div className={`preview-workspace ${theaterMode ? "theater-mode" : ""}`}>
-        <aside className="slide-strip" aria-label="投影片縮圖">
-          <div className="slide-strip-heading"><span>正式輸出</span><strong>{previewUrls.length}</strong></div>
+        <aside className="slide-strip" aria-label={tr("投影片縮圖")}>
+          <div className="slide-strip-heading"><span>{tr("正式輸出")}</span><strong>{previewUrls.length}</strong></div>
           {previewUrls.map((url, index) => (
             <button key={url} className={active === index ? "active" : ""} onClick={() => setActive(index)} aria-label={`前往第 ${index + 1} 頁`}>
               <span className="thumbnail-number">{index + 1}</span>
@@ -1351,42 +1374,42 @@ function PreviewView({
         </aside>
 
         <section className="slide-stage" ref={stageRef}>
-          {theaterMode && <button className="theater-exit" onClick={toggleFullscreen}><X size={16} /> 退出全螢幕</button>}
-          <div className="stage-meta"><span>正式 PPTX / PDF 渲染</span><span>頁面 {active + 1} / {previewUrls.length || slides.length}</span></div>
+          {theaterMode && <button className="theater-exit" onClick={toggleFullscreen}><X size={16} /> {tr("退出全螢幕")}</button>}
+          <div className="stage-meta"><span>{tr("正式 PPTX / PDF 渲染")}</span><span>{locale === "en" ? `Slide ${active + 1}` : `頁面 ${active + 1}`} / {previewUrls.length || slides.length}</span></div>
           <div className="slide-frame official-preview">
             {rendering ? (
-              <div className="rendering-preview"><LoaderCircle className="spin" size={28} /><strong>正在重新套用模板</strong></div>
+              <div className="rendering-preview"><LoaderCircle className="spin" size={28} /><strong>{tr("正在重新套用模板")}</strong></div>
             ) : previewUrls[active] ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img key={`${active}-${animationsEnabled}`} className={animationsEnabled ? "animate-slide-image" : ""} src={resolveApiUrl(previewUrls[active])} alt={`簡報第 ${active + 1} 頁`} />
             ) : (
-              <div className="rendering-preview"><LoaderCircle className="spin" size={28} /><strong>正在準備正式預覽</strong></div>
+              <div className="rendering-preview"><LoaderCircle className="spin" size={28} /><strong>{tr("正在準備正式預覽")}</strong></div>
             )}
           </div>
           <div className="slide-controls">
-            <button onClick={() => setActive(Math.max(0, active - 1))} disabled={active === 0} aria-label="上一頁"><ChevronLeft size={19} /></button>
+            <button onClick={() => setActive(Math.max(0, active - 1))} disabled={active === 0} aria-label={tr("上一頁")}><ChevronLeft size={19} /></button>
             <span>{active + 1} / {previewUrls.length || slides.length}</span>
-            <button onClick={() => setActive(Math.min(previewUrls.length - 1, active + 1))} disabled={active >= previewUrls.length - 1} aria-label="下一頁"><ChevronRight size={19} /></button>
+            <button onClick={() => setActive(Math.min(previewUrls.length - 1, active + 1))} disabled={active >= previewUrls.length - 1} aria-label={tr("下一頁")}><ChevronRight size={19} /></button>
           </div>
         </section>
 
         <aside className="review-panel">
           <div className="review-icon"><MonitorUp size={22} /></div>
-          <p className="eyebrow">下載前確認</p>
-          <h2>每一頁都看過了嗎？</h2>
-          <p>請檢查文字、數字與版面。若需要修改，可以返回上一步重新產生。</p>
+          <p className="eyebrow">{tr("下載前確認")}</p>
+          <h2>{tr("每一頁都看過了嗎？")}</h2>
+          <p>{tr("請檢查文字、數字與版面。若需要修改，可以返回上一步重新產生。")}</p>
           <ul>
-            <li><Check size={15} /> 標題與內容正確</li>
-            <li><Check size={15} /> 沒有文字溢出</li>
-            <li><Check size={15} /> 預覽與下載檔一致</li>
+            <li><Check size={15} /> {tr("標題與內容正確")}</li>
+            <li><Check size={15} /> {tr("沒有文字溢出")}</li>
+            <li><Check size={15} /> {tr("預覽與下載檔一致")}</li>
           </ul>
           {actionError && <p className="preview-action-error">{actionError}</p>}
           {!confirmed ? (
-            <button className="primary-button" onClick={confirmPresentation} disabled={!assets || rendering}><Check size={17} /> 確認簡報沒問題</button>
+            <button className="primary-button" onClick={confirmPresentation} disabled={!assets || rendering}><Check size={17} /> {tr("確認簡報沒問題")}</button>
           ) : (
-            <div className="confirmed-state"><span><Check size={17} /></span><div><strong>已確認，可以下載</strong><small>PPTX 內的文字仍可編輯</small></div></div>
+            <div className="confirmed-state"><span><Check size={17} /></span><div><strong>{tr("已確認，可以下載")}</strong><small>{tr("PPTX 內的文字仍可編輯")}</small></div></div>
           )}
-          <button className="text-button" onClick={onBack}>需要調整內容 <ArrowRight size={15} /></button>
+          <button className="text-button" onClick={onBack}>{tr("需要調整內容")} <ArrowRight size={15} /></button>
         </aside>
       </div>
     </main>
@@ -1398,12 +1421,15 @@ function LibraryView({
   onOpen,
   onDuplicate,
   onRetry,
+  locale,
 }: {
   onCreate: () => void;
   onOpen: (id: string) => Promise<void>;
   onDuplicate: (id: string) => Promise<void>;
   onRetry: (id: string) => Promise<void>;
+  locale: AppLocale;
 }) {
+  const tr = (text: string) => translate(locale, text);
   const [items, setItems] = useState<PresentationRecord[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
@@ -1479,22 +1505,22 @@ function LibraryView({
   };
   const visible = items.filter((item) => item.title.toLowerCase().includes(query.toLowerCase()));
   const statusLabels: Record<PresentationRecord["status"], string> = {
-    DRAFT: "草稿", PARSING: "解析中", GENERATING_CONTENT: "生成中", RENDERING: "渲染中",
-    PREVIEW_READY: "待確認", COMPLETED: "已完成", FAILED: "失敗",
+    DRAFT: tr("草稿"), PARSING: tr("解析中"), GENERATING_CONTENT: tr("生成中"), RENDERING: tr("渲染中"),
+    PREVIEW_READY: tr("待確認"), COMPLETED: tr("已完成"), FAILED: tr("失敗"),
   };
 
   return (
     <main className="secondary-view">
       <div className="section-heading">
-        <div><p className="eyebrow">工作空間</p><h1>我的簡報</h1><p>查看、預覽與管理你建立的所有簡報。</p></div>
-        <button className="primary-button" onClick={onCreate}><Plus size={17} /> 建立簡報</button>
+        <div><p className="eyebrow">{tr("工作空間")}</p><h1>{tr("我的簡報")}</h1><p>{tr("查看、預覽與管理你建立的所有簡報。")}</p></div>
+        <button className="primary-button" onClick={onCreate}><Plus size={17} /> {tr("建立簡報")}</button>
       </div>
       <div className="library-tools">
-        <label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜尋簡報" aria-label="搜尋簡報" /></label>
-        <button><Clock3 size={16} /> 最近更新 <ChevronRight size={14} /></button>
+        <label><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={tr("搜尋簡報")} aria-label={tr("搜尋簡報")} /></label>
+        <button><Clock3 size={16} /> {tr("最近更新")} <ChevronRight size={14} /></button>
       </div>
-      {selected.size > 0 && <div className="batch-actions"><span>已選取 {selected.size} 份簡報</span><button className="danger-action" onClick={deleteSelected}><Trash2 size={16} /> 批次刪除</button></div>}
-      {loading && <p className="library-message"><LoaderCircle className="spin" size={18} /> 正在讀取簡報…</p>}
+      {selected.size > 0 && <div className="batch-actions"><span>{locale === "en" ? `${selected.size} presentations selected` : `已選取 ${selected.size} 份簡報`}</span><button className="danger-action" onClick={deleteSelected}><Trash2 size={16} /> {tr("批次刪除")}</button></div>}
+      {loading && <p className="library-message"><LoaderCircle className="spin" size={18} /> {tr("正在讀取簡報…")}</p>}
       {error && <p className="library-message error">{error}</p>}
       <div className="presentation-grid">
         {!loading && visible.map((item, index) => (
@@ -1502,22 +1528,22 @@ function LibraryView({
             <label className="presentation-select"><input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelected(item.id)} aria-label={`選取 ${item.title}`} /></label>
             <div className={`presentation-cover cover-${index + 1}`}><span>{String(index + 1).padStart(2, "0")}</span><strong>{item.title}</strong><BrandMark /></div>
             <div className="presentation-info">
-              <div><h2>{item.title}</h2><p>{item.slide_count} 頁 · {new Intl.DateTimeFormat("zh-TW", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(item.updated_at))}</p>{item.status === "FAILED" && item.last_error && <small className="presentation-error">{item.last_error}</small>}</div>
+              <div><h2>{item.title}</h2><p>{locale === "en" ? `${item.slide_count} slides` : `${item.slide_count} 頁`} · {new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(item.updated_at))}</p>{item.status === "FAILED" && item.last_error && <small className="presentation-error">{item.last_error}</small>}</div>
               <div className="presentation-card-actions">
                 {item.status === "FAILED" && item.can_retry ? (
-                  <button className="quiet-button" onClick={() => void retryOne(item)} disabled={busyId === item.id}>{busyId === item.id ? <LoaderCircle className="spin" size={15} /> : <RefreshCcw size={15} />} {busyId === item.id ? "重試中" : item.failed_stage === "render" ? "重新渲染" : "重試"}</button>
+                  <button className="quiet-button" onClick={() => void retryOne(item)} disabled={busyId === item.id}>{busyId === item.id ? <LoaderCircle className="spin" size={15} /> : <RefreshCcw size={15} />} {tr(busyId === item.id ? "重試中" : item.failed_stage === "render" ? "重新渲染" : "重試")}</button>
                 ) : (
-                  <button className="quiet-button" onClick={() => void onOpen(item.id)}><MonitorUp size={15} /> 開啟</button>
+                  <button className="quiet-button" onClick={() => void onOpen(item.id)}><MonitorUp size={15} /> {tr("開啟")}</button>
                 )}
-                {item.slide_count > 0 && <button className="quiet-button compact-action" onClick={() => void duplicateOne(item)} disabled={busyId === item.id} aria-label={`複製 ${item.title}`}><Copy size={15} /> 複製</button>}
+                {item.slide_count > 0 && <button className="quiet-button compact-action" onClick={() => void duplicateOne(item)} disabled={busyId === item.id} aria-label={`${tr("複製")} ${item.title}`}><Copy size={15} /> {tr("複製")}</button>}
                 <button className="danger-button" onClick={() => deleteOne(item)} aria-label={`刪除 ${item.title}`}><Trash2 size={17} /></button>
               </div>
             </div>
             <span className="status-badge">{statusLabels[item.status]}</span>
           </article>
         ))}
-        {!loading && !error && visible.length === 0 && <div className="empty-library"><FolderOpen size={26} /><strong>{query ? "找不到符合的簡報" : "還沒有簡報"}</strong><span>{query ? "請試試其他關鍵字。" : "完成第一次生成後，簡報會自動保存在這裡。"}</span></div>}
-        <button className="new-presentation-card" onClick={onCreate}><span><Plus size={21} /></span><strong>建立新簡報</strong><small>從主題或文件開始</small></button>
+        {!loading && !error && visible.length === 0 && <div className="empty-library"><FolderOpen size={26} /><strong>{tr(query ? "找不到符合的簡報" : "還沒有簡報")}</strong><span>{tr(query ? "請試試其他關鍵字。" : "完成第一次生成後，簡報會自動保存在這裡。")}</span></div>}
+        <button className="new-presentation-card" onClick={onCreate}><span><Plus size={21} /></span><strong>{tr("建立新簡報")}</strong><small>{tr("從主題或文件開始")}</small></button>
       </div>
     </main>
   );
@@ -1529,11 +1555,14 @@ function JobCenterView({
   onResume,
   onOpen,
   onRetry,
+  locale,
 }: {
   onResume: (job: GenerationJobSummary) => void;
   onOpen: (presentationId: string) => Promise<void>;
   onRetry: (presentationId: string) => Promise<void>;
+  locale: AppLocale;
 }) {
+  const tr = (text: string) => translate(locale, text);
   const [filter, setFilter] = useState<JobFilter>("all");
   const [jobs, setJobs] = useState<GenerationJobSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1615,18 +1644,18 @@ function JobCenterView({
   };
 
   const filters: Array<{ id: JobFilter; label: string }> = [
-    { id: "all", label: "全部" },
-    { id: "active", label: "執行中" },
-    { id: "failed", label: "失敗" },
-    { id: "completed", label: "已完成" },
-    { id: "canceled", label: "已取消" },
+    { id: "all", label: tr("全部") },
+    { id: "active", label: tr("執行中") },
+    { id: "failed", label: tr("失敗") },
+    { id: "completed", label: tr("已完成") },
+    { id: "canceled", label: tr("已取消") },
   ];
   const statusLabels: Record<GenerationJob["status"], string> = {
-    QUEUED: "等待中",
-    RUNNING: "執行中",
-    COMPLETED: "已完成",
-    FAILED: "失敗",
-    CANCELED: "已取消",
+    QUEUED: tr("等待中"),
+    RUNNING: tr("執行中"),
+    COMPLETED: tr("已完成"),
+    FAILED: tr("失敗"),
+    CANCELED: tr("已取消"),
   };
   const stageLabels: Record<string, string> = {
     queued: "等待背景工作程序",
@@ -1647,16 +1676,16 @@ function JobCenterView({
   return (
     <main className="secondary-view job-center-view">
       <div className="section-heading">
-        <div><p className="eyebrow">BACKGROUND JOBS</p><h1>生成任務中心</h1><p>查看所有背景任務，重新接回進度或處理失敗項目。</p></div>
-        <button className="quiet-button" onClick={() => void loadJobs()} disabled={loading}><RefreshCcw className={loading ? "spin" : ""} size={16} /> 重新整理</button>
+        <div><p className="eyebrow">BACKGROUND JOBS</p><h1>{tr("生成任務中心")}</h1><p>{tr("查看所有背景任務，重新接回進度或處理失敗項目。")}</p></div>
+        <button className="quiet-button" onClick={() => void loadJobs()} disabled={loading}><RefreshCcw className={loading ? "spin" : ""} size={16} /> {tr("重新整理")}</button>
       </div>
-      <div className="job-filters" role="group" aria-label="任務狀態篩選">
+      <div className="job-filters" role="group" aria-label={tr("任務狀態篩選")}>
         {filters.map((item) => <button className={filter === item.id ? "active" : ""} key={item.id} onClick={() => setFilter(item.id)}>{item.label}</button>)}
       </div>
       {error && <p className="library-message error">{error}</p>}
-      {loading && <p className="library-message"><LoaderCircle className="spin" size={18} /> 正在讀取任務…</p>}
-      {!loading && !error && jobs.length === 0 && <div className="empty-job-center"><Clock3 size={28} /><strong>目前沒有這個狀態的任務</strong><span>建立簡報後，生成進度會出現在這裡。</span></div>}
-      <section className="job-list" aria-label="生成任務列表">
+      {loading && <p className="library-message"><LoaderCircle className="spin" size={18} /> {tr("正在讀取任務…")}</p>}
+      {!loading && !error && jobs.length === 0 && <div className="empty-job-center"><Clock3 size={28} /><strong>{tr("目前沒有這個狀態的任務")}</strong><span>{tr("建立簡報後，生成進度會出現在這裡。")}</span></div>}
+      <section className="job-list" aria-label={tr("生成任務列表")}>
         {jobs.map((job) => {
           const active = job.status === "QUEUED" || job.status === "RUNNING";
           const retryable = isGenerationJobRetryable(job);
@@ -1664,18 +1693,18 @@ function JobCenterView({
             <article className={`job-card status-${job.status.toLowerCase()}`} key={job.id}>
               <div className="job-card-icon">{job.status === "COMPLETED" ? <Check size={18} /> : job.status === "FAILED" || job.status === "CANCELED" ? <X size={18} /> : <LoaderCircle className={job.status === "RUNNING" ? "spin" : ""} size={18} />}</div>
               <div className="job-card-copy">
-                <div><span>{job.job_type === "outline" ? "大綱生成" : "內容生成"}</span><strong>{job.presentation_title}</strong></div>
+                <div><span>{tr(job.job_type === "outline" ? "大綱生成" : "內容生成")}</span><strong>{job.presentation_title}</strong></div>
                 <p>{job.error || stageLabels[job.stage] || job.stage}</p>
                 <div className="job-progress"><span style={{ width: `${job.progress}%` }} /></div>
-                <small>{new Intl.DateTimeFormat("zh-TW", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(job.updated_at))} · {job.progress}%</small>
+                <small>{new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(job.updated_at))} · {job.progress}%</small>
               </div>
               <div className="job-card-status"><span>{statusLabels[job.status]}</span></div>
               <div className="job-card-actions">
-                {active && <button className="quiet-button" onClick={() => onResume(job)}><MonitorUp size={15} /> 查看進度</button>}
-                {job.status === "COMPLETED" && <button className="quiet-button" onClick={() => void onOpen(job.presentation_id)}><FolderOpen size={15} /> 開啟目前簡報</button>}
+                {active && <button className="quiet-button" onClick={() => onResume(job)}><MonitorUp size={15} /> {tr("查看進度")}</button>}
+                {job.status === "COMPLETED" && <button className="quiet-button" onClick={() => void onOpen(job.presentation_id)}><FolderOpen size={15} /> {tr("開啟目前簡報")}</button>}
                 {active && <button className="danger-button" onClick={() => void cancelJob(job)} disabled={busyId === job.id} aria-label={`取消 ${job.presentation_title}`}>{busyId === job.id ? <LoaderCircle className="spin" size={15} /> : <X size={15} />}</button>}
-                {retryable && <button className="quiet-button" onClick={() => void retryJob(job)} disabled={busyId === job.id}>{busyId === job.id ? <LoaderCircle className="spin" size={15} /> : <RefreshCcw size={15} />} 重試</button>}
-                {job.status === "FAILED" && !retryable && <span className="job-card-resolved">已由後續任務處理</span>}
+                {retryable && <button className="quiet-button" onClick={() => void retryJob(job)} disabled={busyId === job.id}>{busyId === job.id ? <LoaderCircle className="spin" size={15} /> : <RefreshCcw size={15} />} {tr("重試")}</button>}
+                {job.status === "FAILED" && !retryable && <span className="job-card-resolved">{tr("已由後續任務處理")}</span>}
               </div>
             </article>
           );
@@ -1687,11 +1716,16 @@ function JobCenterView({
 
 function SettingsView({
   providerOptions,
+  preferences,
+  onPreferencesChange,
   reloadProviderOptions,
 }: {
   providerOptions: AIProviderOption[];
+  preferences: AppPreferences;
+  onPreferencesChange: (changes: Partial<AppPreferences>) => void;
   reloadProviderOptions: () => Promise<void>;
 }) {
+  const tr = (text: string) => translate(preferences.locale, text);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -1745,76 +1779,115 @@ function SettingsView({
   };
 
   const testProvider = async (provider: AIProviderOption) => {
-    setConnections((current) => ({ ...current, [provider.id]: { status: "testing", message: "測試中" } }));
+    setConnections((current) => ({ ...current, [provider.id]: { status: "testing", message: tr("測試中") } }));
     try {
       const path = provider.builtIn ? "/ai-provider/test" : `/ai-providers/${provider.id}/test`;
       const response = await fetch(`${apiBaseUrl}${path}`, { method: "POST" });
       const result = await response.json() as { connected?: boolean; error?: string | null };
-      if (!response.ok || !result.connected) throw new Error(result.error || "連線失敗");
-      setConnections((current) => ({ ...current, [provider.id]: { status: "connected", message: "已連線" } }));
+      if (!response.ok || !result.connected) throw new Error(result.error || tr("連線失敗"));
+      setConnections((current) => ({ ...current, [provider.id]: { status: "connected", message: tr("已連線") } }));
     } catch (error) {
       setConnections((current) => ({
         ...current,
-        [provider.id]: { status: "failed", message: error instanceof Error ? error.message : "連線失敗" },
+        [provider.id]: { status: "failed", message: error instanceof Error ? error.message : tr("連線失敗") },
       }));
     }
   };
 
   const deleteProvider = async (provider: AIProviderOption) => {
-    if (!window.confirm(`確定要刪除「${provider.name}」嗎？`)) return;
+    const message = preferences.locale === "en"
+      ? `Delete “${provider.name}”?`
+      : `確定要刪除「${provider.name}」嗎？`;
+    if (!window.confirm(message)) return;
     const response = await fetch(`${apiBaseUrl}/ai-providers/${provider.id}`, { method: "DELETE" });
     if (response.ok) await reloadProviderOptions();
   };
 
   return (
     <main className="secondary-view settings-view">
-      <div className="section-heading"><div><p className="eyebrow">偏好設定</p><h1>AI 模型設定</h1><p>加入文字與本機圖片模型 API，測試後可在建立簡報時自由選擇。</p></div></div>
+      <div className="section-heading"><div><p className="eyebrow">{tr("偏好設定")}</p><h1>{tr("AI 模型設定")}</h1><p>{tr("加入文字與本機圖片模型 API，測試後可在建立簡報時自由選擇。")}</p></div></div>
+      <section className="settings-card preference-card">
+        <div className="settings-section-heading">
+          <span><Languages size={18} /></span>
+          <div><h2>{tr("介面與外觀")}</h2><p>{tr("調整網站語言與色彩模式，設定會自動保存在這台裝置。")}</p></div>
+        </div>
+        <div className="preference-grid">
+          <fieldset className="preference-field">
+            <legend>{tr("介面語言")}</legend>
+            <div className="segmented-control">
+              <button type="button" className={preferences.locale === "zh-TW" ? "active" : ""} aria-pressed={preferences.locale === "zh-TW"} onClick={() => onPreferencesChange({ locale: "zh-TW" })}>繁體中文</button>
+              <button type="button" className={preferences.locale === "en" ? "active" : ""} aria-pressed={preferences.locale === "en"} onClick={() => onPreferencesChange({ locale: "en" })}>English</button>
+            </div>
+            <small>{tr("只會切換網站操作文字，不會翻譯既有簡報內容。")}</small>
+          </fieldset>
+          <fieldset className="preference-field">
+            <legend>{tr("外觀模式")}</legend>
+            <div className="appearance-options">
+              <button type="button" className={preferences.colorMode === "light" ? "active" : ""} aria-pressed={preferences.colorMode === "light"} onClick={() => onPreferencesChange({ colorMode: "light" })}>
+                <span className="appearance-preview light"><Sun size={18} /></span>
+                <span><strong>{tr("淺色")}</strong><small>{tr("淺色模式")}</small></span>
+                {preferences.colorMode === "light" && <Check size={16} />}
+              </button>
+              <button type="button" className={preferences.colorMode === "dark" ? "active" : ""} aria-pressed={preferences.colorMode === "dark"} onClick={() => onPreferencesChange({ colorMode: "dark" })}>
+                <span className="appearance-preview dark"><Moon size={18} /></span>
+                <span><strong>{tr("深色")}</strong><small>{tr("深色模式")}</small></span>
+                {preferences.colorMode === "dark" && <Check size={16} />}
+              </button>
+            </div>
+          </fieldset>
+        </div>
+      </section>
       <section className="settings-card">
         <div className="settings-section-heading provider-heading">
           <span><Sparkles size={18} /></span>
-          <div><h2>已串接的 AI 模型</h2><p>API Key 會加密保存，設定頁不會再次顯示明文。</p></div>
-          <button className="quiet-button" onClick={() => setShowForm((current) => !current)}><Plus size={15} /> 新增模型</button>
+          <div><h2>{tr("已串接的 AI 模型")}</h2><p>{tr("API Key 會加密保存，設定頁不會再次顯示明文。")}</p></div>
+          <button className="quiet-button" onClick={() => setShowForm((current) => !current)}><Plus size={15} /> {tr("新增模型")}</button>
         </div>
 
         {showForm && (
           <form className="provider-form" onSubmit={saveProvider}>
-            <label><span>設定名稱</span><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="例如：公司 OpenAI" required /></label>
-            <label><span>API 類型</span><select value={draft.provider} onChange={(event) => setProviderKind(event.target.value as ProviderKind)}>{Object.entries(providerLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label><span>{tr("設定名稱")}</span><input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder={tr("例如：公司 OpenAI")} required /></label>
+            <label><span>{tr("API 類型")}</span><select value={draft.provider} onChange={(event) => setProviderKind(event.target.value as ProviderKind)}>{Object.entries(providerLabels).map(([value, label]) => <option key={value} value={value}>{tr(label)}</option>)}</select></label>
             <label className="wide"><span>Base URL</span><input value={draft.baseUrl} onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })} type="url" required /></label>
-            <label><span>{draft.provider === "stable_diffusion" ? "本機模型／Checkpoint" : "模型名稱"}</span><input value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} placeholder={draft.provider === "stable_diffusion" ? "例如：local-checkpoint" : "輸入 API 提供的模型 ID"} required /></label>
-            {(draft.provider === "openai" || draft.provider === "openai_compatible") && <label><span>專用圖片模型（選填）</span><input value={draft.imageModel} onChange={(event) => setDraft({ ...draft, imageModel: event.target.value })} placeholder="例如：gpt-image-2" /><small>{draft.provider === "openai" ? "留空時會嘗試使用文字模型的圖片生成工具。" : "相容 API 需填寫可用的圖片模型。"}</small></label>}
-            <label><span>API Key {draft.provider === "ollama" || draft.provider === "openai_compatible" || draft.provider === "stable_diffusion" ? "（選填）" : ""}</span><div className="secret-field"><KeyRound size={15} /><input value={draft.apiKey} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} type="password" autoComplete="new-password" required={draft.provider !== "ollama" && draft.provider !== "openai_compatible" && draft.provider !== "stable_diffusion"} /></div></label>
+            <label><span>{tr(draft.provider === "stable_diffusion" ? "本機模型／Checkpoint" : "模型名稱")}</span><input value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} placeholder={draft.provider === "stable_diffusion" ? "e.g. local-checkpoint" : tr("輸入 API 提供的模型 ID")} required /></label>
+            {(draft.provider === "openai" || draft.provider === "openai_compatible") && <label><span>{tr("專用圖片模型（選填）")}</span><input value={draft.imageModel} onChange={(event) => setDraft({ ...draft, imageModel: event.target.value })} placeholder="e.g. gpt-image-2" /><small>{tr(draft.provider === "openai" ? "留空時會嘗試使用文字模型的圖片生成工具。" : "相容 API 需填寫可用的圖片模型。")}</small></label>}
+            <label><span>API Key {draft.provider === "ollama" || draft.provider === "openai_compatible" || draft.provider === "stable_diffusion" ? `(${tr("選填")})` : ""}</span><div className="secret-field"><KeyRound size={15} /><input value={draft.apiKey} onChange={(event) => setDraft({ ...draft, apiKey: event.target.value })} type="password" autoComplete="new-password" required={draft.provider !== "ollama" && draft.provider !== "openai_compatible" && draft.provider !== "stable_diffusion"} /></div></label>
             {formError && <p className="provider-form-error">{formError}</p>}
-            <div className="provider-form-actions"><button type="button" className="quiet-button" onClick={() => setShowForm(false)}>取消</button><button className="primary-button" disabled={saving}>{saving ? "儲存中" : "儲存設定"}</button></div>
+            <div className="provider-form-actions"><button type="button" className="quiet-button" onClick={() => setShowForm(false)}>{tr("取消")}</button><button className="primary-button" disabled={saving}>{tr(saving ? "儲存中" : "儲存設定")}</button></div>
           </form>
         )}
 
         <div className="provider-list">
           {providerOptions.map((provider) => {
-            const connection = connections[provider.id] ?? { status: "idle", message: "尚未測試" };
+            const connection = connections[provider.id] ?? { status: "idle", message: tr("尚未測試") };
             return (
               <div className="setting-row provider-row" key={provider.id}>
-                <div className="provider-copy"><strong>{provider.name}</strong><small>{providerLabels[provider.provider] ?? provider.provider} · {provider.model}</small>{provider.imageModel && <small>圖片模型 · {provider.imageModel}</small>}<small>{provider.builtIn ? "系統預設" : provider.provider === "stable_diffusion" ? "本機生成，不使用雲端額度" : provider.hasApiKey ? "API Key 已加密保存" : "未設定 API Key"}</small></div>
+                <div className="provider-copy"><strong>{tr(provider.name)}</strong><small>{tr(providerLabels[provider.provider] ?? provider.provider)} · {provider.model}</small>{provider.imageModel && <small>{tr("圖片模型")} · {provider.imageModel}</small>}<small>{tr(provider.builtIn ? "系統預設" : provider.provider === "stable_diffusion" ? "本機生成，不使用雲端額度" : provider.hasApiKey ? "API Key 已加密保存" : "未設定 API Key")}</small></div>
                 <span className={`connection-badge ${connection.status}`}>{connection.message}</span>
                 <div className="provider-actions">
-                  <button className="quiet-button" onClick={() => testProvider(provider)} disabled={connection.status === "testing"}><PlugZap size={14} /> {connection.status === "testing" ? "測試中" : "測試"}</button>
+                  <button className="quiet-button" onClick={() => testProvider(provider)} disabled={connection.status === "testing"}><PlugZap size={14} /> {tr(connection.status === "testing" ? "測試中" : "測試")}</button>
                   {!provider.builtIn && <button className="icon-button danger-button" onClick={() => deleteProvider(provider)} aria-label={`刪除 ${provider.name}`}><Trash2 size={15} /></button>}
                 </div>
               </div>
             );
           })}
-          {providerOptions.length === 0 && <p className="empty-provider">目前無法讀取 AI API，請確認後端服務與 PostgreSQL 已啟動。</p>}
+          {providerOptions.length === 0 && <p className="empty-provider">{tr("目前無法讀取 AI API，請確認後端服務與 PostgreSQL 已啟動。")}</p>}
         </div>
       </section>
       <section className="settings-card">
-        <div className="settings-section-heading"><span><LayoutTemplate size={18} /></span><div><h2>簡報預設值</h2><p>建立新簡報時會自動帶入以下設定。</p></div></div>
-        <div className="settings-form-grid"><label><span>預設語言</span><select defaultValue="zh-TW"><option value="zh-TW">繁體中文</option><option value="en">English</option></select></label><label><span>預設頁數</span><select defaultValue="10"><option value="10">約 10 頁</option><option value="15">約 15 頁</option></select></label></div>
+        <div className="settings-section-heading"><span><LayoutTemplate size={18} /></span><div><h2>{tr("簡報預設值")}</h2><p>{tr("建立新簡報時會自動帶入以下設定。")}</p></div></div>
+        <div className="settings-form-grid">
+          <label><span>{tr("預設語言")}</span><select value={preferences.defaultPresentationLanguage} onChange={(event) => onPreferencesChange({ defaultPresentationLanguage: event.target.value })}><option value="zh-TW">{tr("繁體中文")}</option><option value="en">English</option><option value="ja">日本語</option></select></label>
+          <label><span>{tr("預設頁數")}</span><select value={preferences.defaultSlideCount} onChange={(event) => onPreferencesChange({ defaultSlideCount: event.target.value })}><option value="6">{tr("約 6 頁")}</option><option value="10">{tr("約 10 頁")}</option><option value="15">{tr("約 15 頁")}</option><option value="20">{tr("約 20 頁")}</option></select></label>
+        </div>
       </section>
     </main>
   );
 }
 
 export default function Home() {
+  const [preferences, setPreferences] = useState<AppPreferences>(defaultPreferences);
+  const [preferencesReady, setPreferencesReady] = useState(false);
   const [view, setView] = useState<View>("create");
   const [topic, setTopic] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -1837,6 +1910,28 @@ export default function Home() {
   const [initiallyConfirmed, setInitiallyConfirmed] = useState(false);
   const [rendering, setRendering] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const saved = readPreferences(window.localStorage);
+    const timer = window.setTimeout(() => {
+      setPreferences(saved);
+      setLanguage(saved.defaultPresentationLanguage);
+      setSlideCount(saved.defaultSlideCount);
+      setPreferencesReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesReady) return;
+    writePreferences(window.localStorage, preferences);
+    document.documentElement.dataset.colorMode = preferences.colorMode;
+    document.documentElement.lang = preferences.locale === "en" ? "en" : "zh-Hant";
+  }, [preferences, preferencesReady]);
+
+  const updatePreferences = (changes: Partial<AppPreferences>) => {
+    setPreferences((current) => ({ ...current, ...changes }));
+  };
 
   useEffect(() => {
     const saved = window.localStorage.getItem("ppt-creator-active-job");
@@ -2235,8 +2330,8 @@ export default function Home() {
     setFiles([]);
     setSourceStatuses({});
     setTemplate("editorial");
-    setLanguage("zh-TW");
-    setSlideCount("10");
+    setLanguage(preferences.defaultPresentationLanguage);
+    setSlideCount(preferences.defaultSlideCount);
     setCustomSlideCount(false);
     setGenerateImages(false);
     setProgress(0);
@@ -2258,17 +2353,17 @@ export default function Home() {
 
   return (
     <div className="app-shell">
-      <SideNavigation view={view} compact={compactNavigation} onChange={changeView} />
+      <SideNavigation view={view} compact={compactNavigation} locale={preferences.locale} onChange={changeView} />
       <div className={`app-content ${compactNavigation ? "compact-navigation" : ""}`}>
-        {view !== "preview" && <AppHeader onCreate={resetNewPresentation} />}
-        {view === "create" && <CreateView topic={topic} setTopic={setTopic} files={files} setFiles={(nextFiles) => { setFiles(nextFiles); setSourceStatuses({}); }} template={template} setTemplate={setTemplate} language={language} setLanguage={setLanguage} slideCount={slideCount} setSlideCount={setSlideCount} customSlideCount={customSlideCount} setCustomSlideCount={setCustomSlideCount} providerOptions={providerOptions} selectedProviderId={selectedProviderId} setSelectedProviderId={setSelectedProviderId} generateImages={generateImages} setGenerateImages={setGenerateImages} imageProviderId={imageProviderId} setImageProviderId={setImageProviderId} sourceStatuses={sourceStatuses} onGenerate={startGeneration} />}
-        {view === "generating" && <GeneratingView progress={progress} stage={jobStage} error={generationError} sourceStatuses={sourceStatuses} onBack={resetNewPresentation} onCancel={() => void cancelActiveGeneration()} />}
-        {view === "outline" && outline && <OutlineView outline={outline} onConfirm={confirmOutline} onBack={resetNewPresentation} />}
-        {view === "editor" && <EditorView topic={topic} slides={slides} template={template} presentationId={presentationId} onSave={saveEditedDeck} onRestore={restorePresentationVersion} onCancel={() => setView("preview")} />}
-        {view === "preview" && <PreviewView topic={topic} slides={slides} presentationId={presentationId} template={template} assets={assets} initiallyConfirmed={initiallyConfirmed} rendering={rendering} onTemplateChange={async (nextTemplate) => { if (!presentationId) return; await renderDeck(presentationId, topic, slides, nextTemplate); }} onBack={() => setView("editor")} />}
-        {view === "library" && <LibraryView onCreate={resetNewPresentation} onOpen={openPresentation} onDuplicate={duplicatePresentation} onRetry={retryPresentation} />}
-        {view === "jobs" && <JobCenterView onResume={resumeGenerationJob} onOpen={openPresentation} onRetry={retryPresentation} />}
-        {view === "settings" && <SettingsView providerOptions={providerOptions} reloadProviderOptions={reloadProviderOptions} />}
+        {view !== "preview" && <AppHeader locale={preferences.locale} onCreate={resetNewPresentation} />}
+        {view === "create" && <CreateView topic={topic} setTopic={setTopic} files={files} setFiles={(nextFiles) => { setFiles(nextFiles); setSourceStatuses({}); }} template={template} setTemplate={setTemplate} language={language} setLanguage={setLanguage} slideCount={slideCount} setSlideCount={setSlideCount} customSlideCount={customSlideCount} setCustomSlideCount={setCustomSlideCount} providerOptions={providerOptions} selectedProviderId={selectedProviderId} setSelectedProviderId={setSelectedProviderId} generateImages={generateImages} setGenerateImages={setGenerateImages} imageProviderId={imageProviderId} setImageProviderId={setImageProviderId} sourceStatuses={sourceStatuses} locale={preferences.locale} onGenerate={startGeneration} />}
+        {view === "generating" && <GeneratingView progress={progress} stage={jobStage} error={generationError} sourceStatuses={sourceStatuses} locale={preferences.locale} onBack={resetNewPresentation} onCancel={() => void cancelActiveGeneration()} />}
+        {view === "outline" && outline && <OutlineView outline={outline} locale={preferences.locale} onConfirm={confirmOutline} onBack={resetNewPresentation} />}
+        {view === "editor" && <EditorView topic={topic} slides={slides} template={template} presentationId={presentationId} locale={preferences.locale} onSave={saveEditedDeck} onRestore={restorePresentationVersion} onCancel={() => setView("preview")} />}
+        {view === "preview" && <PreviewView topic={topic} slides={slides} presentationId={presentationId} template={template} assets={assets} initiallyConfirmed={initiallyConfirmed} rendering={rendering} locale={preferences.locale} onTemplateChange={async (nextTemplate) => { if (!presentationId) return; await renderDeck(presentationId, topic, slides, nextTemplate); }} onBack={() => setView("editor")} />}
+        {view === "library" && <LibraryView locale={preferences.locale} onCreate={resetNewPresentation} onOpen={openPresentation} onDuplicate={duplicatePresentation} onRetry={retryPresentation} />}
+        {view === "jobs" && <JobCenterView locale={preferences.locale} onResume={resumeGenerationJob} onOpen={openPresentation} onRetry={retryPresentation} />}
+        {view === "settings" && <SettingsView providerOptions={providerOptions} preferences={preferences} onPreferencesChange={updatePreferences} reloadProviderOptions={reloadProviderOptions} />}
       </div>
     </div>
   );
