@@ -554,7 +554,11 @@ async def _generate_deck(
                 visual_prompt = slide.visual_prompt or f"{slide.title}。{slide.body}"
                 prompt = (
                     f"{visual_prompt}. Purely visual editorial illustration for a presentation, "
-                    "landscape composition, abstract or photographic scene, clean focal subject. "
+                    "16:9 landscape composition, simple scene, one clear focal subject, "
+                    "high contrast, generous negative space, suitable for projection. "
+                    "Represent only the supplied concept; do not invent real events, people, "
+                    "locations, brands, products, documents, charts, metrics, or outcomes. "
+                    "Prefer an abstract conceptual scene when factual visual evidence is unavailable. "
                     "Do not draw words, letters, numbers, signs, labels, logos, screens, "
                     "packaging, captions, typography, or watermarks."
                 )

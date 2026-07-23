@@ -49,6 +49,25 @@ export type SlideData = {
   image_data?: string | null;
 };
 
+export const PROJECTION_TYPOGRAPHY = {
+  chrome: 11,
+  eyebrow: 13,
+  coverTitle: 52,
+  coverTitleCompact: 42,
+  sectionTitle: 46,
+  sectionTitleCompact: 38,
+  contentTitle: 40,
+  contentTitleCompact: 34,
+  body: 20,
+  bodyCompact: 18,
+  itemLabel: 13,
+  itemTitle: 20,
+  itemBody: 18,
+  callout: 16,
+  metricValue: 54,
+  metricLabel: 18,
+} as const;
+
 export function pointsFrom(body: string, count = 3): string[] {
   const points = body
     .split(/[。！？；\n]+/)
@@ -217,7 +236,8 @@ export async function buildPresentationPptx(
 
     slide.addText("PPT CREATOR", {
       x: 0.6, y: 0.28, w: 2.8, h: 0.28,
-      fontFace: font, fontSize: 9, bold: true, color: theme.accent, charSpacing: 2,
+      fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.chrome, bold: true,
+      color: theme.accent, charSpacing: 2,
       margin: 0,
     });
     slide.addShape(pptx.ShapeType.line, {
@@ -226,7 +246,8 @@ export async function buildPresentationPptx(
     });
     slide.addText(String(index + 1).padStart(2, "0"), {
       x: 11.8, y: 6.98, w: 0.9, h: 0.24,
-      fontFace: font, fontSize: 9, color: theme.muted, align: "right", margin: 0,
+      fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.chrome,
+      color: theme.muted, align: "right", margin: 0,
     });
 
     if (item.kind === "cover") {
@@ -241,16 +262,22 @@ export async function buildPresentationPptx(
       });
       slide.addText(item.eyebrow, {
         x: 0.75, y: 1.05, w: 4, h: 0.3,
-        fontFace: font, fontSize: 12, bold: true, color: theme.accent, charSpacing: 1.4, margin: 0,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.eyebrow,
+        bold: true, color: theme.accent, charSpacing: 1.4, margin: 0,
       });
       slide.addText(title, {
         x: 0.72, y: 1.65, w: 8.2, h: 2.15,
-        fontFace: headingFont, fontSize: title.length > 34 ? 38 : 48, bold: true,
+        fontFace: headingFont,
+        fontSize: title.length > 34
+          ? PROJECTION_TYPOGRAPHY.coverTitleCompact
+          : PROJECTION_TYPOGRAPHY.coverTitle,
+        bold: true,
         color: theme.text, margin: 0, breakLine: false, valign: "middle",
       });
       slide.addText(item.body, {
         x: 0.76, y: 4.28, w: 6.8, h: 0.95,
-        fontFace: font, fontSize: 18, color: theme.muted, margin: 0, breakLine: false,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.body,
+        color: theme.muted, margin: 0, breakLine: false,
       });
     } else if (item.kind === "section") {
       slide.addShape(pptx.ShapeType.rect, {
@@ -264,12 +291,17 @@ export async function buildPresentationPptx(
       });
       slide.addText(item.eyebrow, {
         x: 4.9, y: 1.45, w: 5.4, h: 0.3,
-        fontFace: font, fontSize: 11, bold: true, color: theme.accent,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.eyebrow,
+        bold: true, color: theme.accent,
         charSpacing: 1.4, margin: 0,
       });
       slide.addText(title, {
         x: 4.85, y: 2.02, w: 7.25, h: 1.55,
-        fontFace: headingFont, fontSize: title.length > 32 ? 34 : 43, bold: true,
+        fontFace: headingFont,
+        fontSize: title.length > 32
+          ? PROJECTION_TYPOGRAPHY.sectionTitleCompact
+          : PROJECTION_TYPOGRAPHY.sectionTitle,
+        bold: true,
         color: theme.text, margin: 0, breakLine: false, valign: "middle",
       });
       slide.addShape(pptx.ShapeType.line, {
@@ -278,7 +310,8 @@ export async function buildPresentationPptx(
       });
       slide.addText(item.body, {
         x: 4.9, y: 4.25, w: 6.65, h: 1.15,
-        fontFace: font, fontSize: 17, color: theme.muted, margin: 0,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.body,
+        color: theme.muted, margin: 0,
         breakLine: false,
       });
       [0.58, 0.92, 1.28].forEach((height, stripeIndex) => {
@@ -291,11 +324,16 @@ export async function buildPresentationPptx(
     } else if (item.kind === "cards") {
       slide.addText(item.eyebrow, {
         x: 0.72, y: 0.92, w: 4, h: 0.3,
-        fontFace: font, fontSize: 11, bold: true, color: theme.accent, charSpacing: 1.2, margin: 0,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.eyebrow,
+        bold: true, color: theme.accent, charSpacing: 1.2, margin: 0,
       });
       slide.addText(title, {
         x: 0.7, y: 1.28, w: item.image_data ? 7.55 : 11.8, h: 0.85,
-        fontFace: headingFont, fontSize: title.length > 35 ? 30 : 36, bold: true, color: theme.text, margin: 0,
+        fontFace: headingFont,
+        fontSize: title.length > 35
+          ? PROJECTION_TYPOGRAPHY.contentTitleCompact
+          : PROJECTION_TYPOGRAPHY.contentTitle,
+        bold: true, color: theme.text, margin: 0,
       });
       if (item.image_data) {
         slide.addImage({ data: item.image_data, x: 8.72, y: 0.72, w: 3.9, h: 1.62 });
@@ -322,17 +360,19 @@ export async function buildPresentationPptx(
         });
         slide.addText(contentItem.label, {
           x: layout.x + 0.28, y: layout.y + 0.28, w: 0.6, h: 0.3,
-          fontFace: font, fontSize: 12, bold: true,
+          fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.itemLabel, bold: true,
           color: featured ? theme.onAccent : theme.accent, margin: 0,
         });
         slide.addText(contentItem.title, {
           x: layout.x + 0.28, y: layout.y + 0.84, w: layout.w - 0.56, h: 0.42,
-          fontFace: font, fontSize: 18, bold: true,
+          fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.itemTitle, bold: true,
           color: featured ? theme.onAccent : theme.text, margin: 0,
         });
         slide.addText(contentItem.body, {
           x: layout.x + 0.28, y: layout.y + 1.5, w: layout.w - 0.56, h: layout.h - 1.77,
-          fontFace: font, fontSize: featured ? 16 : 14,
+          fontFace: font, fontSize: featured
+            ? PROJECTION_TYPOGRAPHY.bodyCompact
+            : PROJECTION_TYPOGRAPHY.itemBody,
           color: featured ? theme.onAccent : theme.muted, margin: 0.02, breakLine: false,
         });
       });
@@ -343,17 +383,23 @@ export async function buildPresentationPptx(
       });
       slide.addText(item.eyebrow, {
         x: 0.72, y: 1.03, w: 4, h: 0.3,
-        fontFace: font, fontSize: 11, bold: true, color: theme.accent,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.eyebrow,
+        bold: true, color: theme.accent,
         charSpacing: 1.2, margin: 0,
       });
       slide.addText(title, {
         x: 0.7, y: 1.48, w: 6.15, h: 1.4,
-        fontFace: headingFont, fontSize: title.length > 32 ? 30 : 38, bold: true,
+        fontFace: headingFont,
+        fontSize: title.length > 32
+          ? PROJECTION_TYPOGRAPHY.contentTitleCompact
+          : PROJECTION_TYPOGRAPHY.contentTitle,
+        bold: true,
         color: theme.text, margin: 0, breakLine: false,
       });
       slide.addText(item.body, {
         x: 0.72, y: 3.35, w: 5.9, h: 1.35,
-        fontFace: font, fontSize: 17, color: theme.muted, margin: 0,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.body,
+        color: theme.muted, margin: 0,
         breakLine: false,
       });
       if (item.image_data) {
@@ -361,12 +407,13 @@ export async function buildPresentationPptx(
       } else {
         slide.addText("FOCUS", {
           x: 8.08, y: 1.12, w: 1.2, h: 0.25,
-          fontFace: font, fontSize: 9, bold: true, color: theme.accent,
+          fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.chrome,
+          bold: true, color: theme.accent,
           charSpacing: 1.4, margin: 0,
         });
         slide.addText(points[0], {
           x: 8.05, y: 1.65, w: 4.35, h: 1.25,
-          fontFace: font, fontSize: 22, bold: true, color: theme.text,
+          fontFace: font, fontSize: 24, bold: true, color: theme.text,
           margin: 0, breakLine: false,
         });
         points.slice(1).forEach((point, pointIndex) => {
@@ -376,26 +423,34 @@ export async function buildPresentationPptx(
           });
           slide.addText(String(pointIndex + 2).padStart(2, "0"), {
             x: 8.08, y: 3.66 + pointIndex * 1.18, w: 0.42, h: 0.26,
-            fontFace: font, fontSize: 10, bold: true, color: theme.accent, margin: 0,
+            fontFace: font, fontSize: 12, bold: true,
+            color: theme.accent, margin: 0,
           });
           slide.addText(point, {
             x: 8.68, y: 3.62 + pointIndex * 1.18, w: 3.55, h: 0.62,
-            fontFace: font, fontSize: 13, color: theme.muted, margin: 0,
+            fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.bodyCompact,
+            color: theme.muted, margin: 0,
           });
         });
       }
     } else if (item.kind === "metric") {
       slide.addText(item.eyebrow, {
         x: 0.72, y: 0.92, w: 4, h: 0.3,
-        fontFace: font, fontSize: 11, bold: true, color: theme.accent, margin: 0,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.eyebrow,
+        bold: true, color: theme.accent, margin: 0,
       });
       slide.addText(title, {
         x: 0.7, y: 1.38, w: item.image_data ? 6.5 : 7.1, h: 1.28,
-        fontFace: headingFont, fontSize: title.length > 34 ? 29 : 36, bold: true, color: theme.text, margin: 0,
+        fontFace: headingFont,
+        fontSize: title.length > 34
+          ? PROJECTION_TYPOGRAPHY.contentTitleCompact
+          : PROJECTION_TYPOGRAPHY.contentTitle,
+        bold: true, color: theme.text, margin: 0,
       });
       slide.addText(structuredMetric.context, {
         x: 0.72, y: 3.02, w: item.image_data ? 5.8 : 6.3, h: 1.35,
-        fontFace: font, fontSize: 17, color: theme.muted, margin: 0, breakLine: false,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.body,
+        color: theme.muted, margin: 0, breakLine: false,
       });
       if (item.image_data) {
         slide.addImage({ data: item.image_data, x: 7.65, y: 1.08, w: 4.95, h: 4.95 });
@@ -406,22 +461,29 @@ export async function buildPresentationPptx(
         });
         slide.addText(structuredMetric.value, {
           x: 8.68, y: 2.03, w: 3, h: 1,
-          fontFace: font, fontSize: 49, bold: true, color: theme.accent, align: "center", margin: 0,
+          fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.metricValue,
+          bold: true, color: theme.accent, align: "center", margin: 0,
         });
         slide.addText(structuredMetric.label, {
           x: 8.7, y: 3.23, w: 3, h: 0.55,
-          fontFace: font, fontSize: 16, bold: true, color: theme.text, align: "center", margin: 0,
+          fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.metricLabel,
+          bold: true, color: theme.text, align: "center", margin: 0,
         });
       }
     } else if (item.kind === "comparison") {
       slide.addText(item.eyebrow, {
         x: 0.72, y: 0.92, w: 4, h: 0.3,
-        fontFace: font, fontSize: 11, bold: true, color: theme.accent,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.eyebrow,
+        bold: true, color: theme.accent,
         charSpacing: 1.2, margin: 0,
       });
       slide.addText(title, {
         x: 0.7, y: 1.35, w: 11.4, h: 0.88,
-        fontFace: headingFont, fontSize: title.length > 38 ? 29 : 36, bold: true,
+        fontFace: headingFont,
+        fontSize: title.length > 38
+          ? PROJECTION_TYPOGRAPHY.contentTitleCompact
+          : PROJECTION_TYPOGRAPHY.contentTitle,
+        bold: true,
         color: theme.text, margin: 0,
       });
       [
@@ -447,16 +509,18 @@ export async function buildPresentationPptx(
         });
         slide.addText(column.label, {
           x: column.x + 0.36, y: 2.93, w: 1.15, h: 0.24,
-          fontFace: font, fontSize: 9, bold: true, color: theme.accent,
+          fontFace: font, fontSize: 12, bold: true, color: theme.accent,
           charSpacing: 1.2, margin: 0,
         });
         slide.addText(column.heading, {
           x: column.x + 0.36, y: 3.4, w: 2.4, h: 0.42,
-          fontFace: font, fontSize: 20, bold: true, color: theme.text, margin: 0,
+          fontFace: font, fontSize: 22, bold: true,
+          color: theme.text, margin: 0,
         });
         slide.addText(column.point, {
           x: column.x + 0.36, y: 4.05, w: 4.82, h: 0.82,
-          fontFace: font, fontSize: 14, color: theme.muted, margin: 0,
+          fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.itemBody,
+          color: theme.muted, margin: 0,
           breakLine: false,
         });
       });
@@ -471,17 +535,23 @@ export async function buildPresentationPptx(
       });
       slide.addText(structuredComparison.callout, {
         x: 6.72, y: 5.63, w: 5.55, h: 0.5,
-        fontFace: font, fontSize: 12, italic: true, color: theme.muted,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.callout,
+        italic: true, color: theme.muted,
         align: "right", margin: 0,
       });
     } else if (item.kind === "roadmap") {
       slide.addText(item.eyebrow, {
         x: 0.72, y: 0.92, w: 4, h: 0.3,
-        fontFace: font, fontSize: 11, bold: true, color: theme.accent, margin: 0,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.eyebrow,
+        bold: true, color: theme.accent, margin: 0,
       });
       slide.addText(title, {
         x: 0.7, y: 1.35, w: item.image_data ? 7.55 : 11.5, h: 1.0,
-        fontFace: headingFont, fontSize: title.length > 35 ? 30 : 36, bold: true, color: theme.text, margin: 0,
+        fontFace: headingFont,
+        fontSize: title.length > 35
+          ? PROJECTION_TYPOGRAPHY.contentTitleCompact
+          : PROJECTION_TYPOGRAPHY.contentTitle,
+        bold: true, color: theme.text, margin: 0,
       });
       if (item.image_data) {
         slide.addImage({ data: item.image_data, x: 8.72, y: 0.72, w: 3.9, h: 1.62 });
@@ -509,15 +579,18 @@ export async function buildPresentationPptx(
         });
         slide.addText(contentItem.label, {
           x, y: stepY + 0.14, w: 0.72, h: 0.28,
-          fontFace: font, fontSize: 13, bold: true, color: theme.onAccent, align: "center", margin: 0,
+          fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.itemLabel,
+          bold: true, color: theme.onAccent, align: "center", margin: 0,
         });
         slide.addText(contentItem.title, {
           x: x - 0.05, y: stepY + 0.96, w: 2.9, h: 0.42,
-          fontFace: font, fontSize: 18, bold: true, color: theme.text, margin: 0,
+          fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.itemTitle,
+          bold: true, color: theme.text, margin: 0,
         });
         slide.addText(contentItem.body, {
           x: x - 0.05, y: stepY + 1.48, w: 3.02, h: 0.74,
-          fontFace: font, fontSize: 14, color: theme.muted, margin: 0, breakLine: false,
+          fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.itemBody,
+          color: theme.muted, margin: 0, breakLine: false,
         });
       });
     } else if (item.kind === "quote") {
@@ -536,12 +609,17 @@ export async function buildPresentationPptx(
       });
       slide.addText(item.eyebrow, {
         x: 0.78, y: 1.05, w: 4.4, h: 0.3,
-        fontFace: font, fontSize: 11, bold: true, color: theme.onAccent,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.eyebrow,
+        bold: true, color: theme.onAccent,
         charSpacing: 1.3, margin: 0,
       });
       slide.addText(title, {
         x: 0.76, y: 1.73, w: 10.45, h: 1.82,
-        fontFace: headingFont, fontSize: title.length > 42 ? 32 : 41, bold: true,
+        fontFace: headingFont,
+        fontSize: title.length > 42
+          ? PROJECTION_TYPOGRAPHY.sectionTitleCompact
+          : PROJECTION_TYPOGRAPHY.sectionTitle,
+        bold: true,
         color: theme.onAccent, margin: 0, breakLine: false,
       });
       slide.addShape(pptx.ShapeType.line, {
@@ -550,7 +628,8 @@ export async function buildPresentationPptx(
       });
       slide.addText(item.body, {
         x: 1.08, y: 4.08, w: 6.35, h: 1.12,
-        fontFace: font, fontSize: 17, color: theme.onAccent, margin: 0,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.body,
+        color: theme.onAccent, margin: 0,
         breakLine: false,
       });
     } else {
@@ -560,16 +639,22 @@ export async function buildPresentationPptx(
       });
       slide.addText(item.eyebrow, {
         x: 4.15, y: 1.28, w: 5, h: 0.32,
-        fontFace: font, fontSize: 11, bold: true, color: theme.accent, align: "center", margin: 0,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.eyebrow,
+        bold: true, color: theme.accent, align: "center", margin: 0,
       });
       slide.addText(title, {
         x: 1.6, y: 2.0, w: 10.1, h: 1.2,
-        fontFace: headingFont, fontSize: title.length > 35 ? 33 : 42, bold: true, color: theme.text,
+        fontFace: headingFont,
+        fontSize: title.length > 35
+          ? PROJECTION_TYPOGRAPHY.sectionTitleCompact
+          : PROJECTION_TYPOGRAPHY.sectionTitle,
+        bold: true, color: theme.text,
         align: "center", margin: 0,
       });
       slide.addText(item.body, {
         x: 3.05, y: 3.65, w: 7.2, h: 0.9,
-        fontFace: font, fontSize: 17, color: theme.muted, align: "center", margin: 0,
+        fontFace: font, fontSize: PROJECTION_TYPOGRAPHY.body,
+        color: theme.muted, align: "center", margin: 0,
       });
     }
   });

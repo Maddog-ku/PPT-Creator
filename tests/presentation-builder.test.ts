@@ -8,6 +8,7 @@ import {
   comparisonFrom,
   itemsFrom,
   metricFrom,
+  PROJECTION_TYPOGRAPHY,
   type SlideData,
 } from "../app/presentation-builder.ts";
 import {
@@ -87,6 +88,16 @@ test("upgrades legacy body-only slide data in the renderer", () => {
     comparisonFrom({ ...slide, kind: "comparison" }).right.body,
     "驗證方案",
   );
+});
+
+test("uses projection-safe typography for exported slides", () => {
+  assert.ok(PROJECTION_TYPOGRAPHY.coverTitle >= 48);
+  assert.ok(PROJECTION_TYPOGRAPHY.contentTitle >= 36);
+  assert.ok(PROJECTION_TYPOGRAPHY.body >= 20);
+  assert.ok(PROJECTION_TYPOGRAPHY.bodyCompact >= 18);
+  assert.ok(PROJECTION_TYPOGRAPHY.itemBody >= 18);
+  assert.ok(PROJECTION_TYPOGRAPHY.itemTitle >= 20);
+  assert.ok(PROJECTION_TYPOGRAPHY.chrome >= 11);
 });
 
 test("supports at least ten distinct visual templates in editable PPTX output", async () => {
