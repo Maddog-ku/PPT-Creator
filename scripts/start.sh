@@ -1,8 +1,8 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="${0:A:h:h}"
-cd "$PROJECT_DIR"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${PROJECT_DIR}"
 
 if ! docker info >/dev/null 2>&1; then
   echo "請先啟動 Docker Desktop。"
@@ -14,7 +14,7 @@ if ! curl -fsS http://127.0.0.1:11434/api/version >/dev/null 2>&1; then
     echo "正在啟動本機 Ollama…"
     open -a Ollama
   fi
-  for _ in {1..30}; do
+  for _ in $(seq 1 30); do
     if curl -fsS http://127.0.0.1:11434/api/version >/dev/null 2>&1; then
       break
     fi

@@ -66,245 +66,34 @@ import {
   writePreferences,
 } from "./preferences";
 import type { AppLocale, AppPreferences } from "./preferences";
-
-type View = "create" | "generating" | "outline" | "editor" | "preview" | "library" | "jobs" | "settings";
-
-type ProviderKind = "ollama" | "openai" | "anthropic" | "gemini" | "openai_compatible" | "stable_diffusion";
-
-type AIProviderResponse = {
-  provider: string;
-  model: string;
-  image_model?: string | null;
-  transport: "api";
-};
-
-type AIProviderOption = {
-  id: string;
-  name: string;
-  provider: ProviderKind;
-  model: string;
-  baseUrl?: string;
-  hasApiKey?: boolean;
-  builtIn?: boolean;
-  imageModel?: string | null;
-};
-
-type ProviderDraft = {
-  name: string;
-  provider: ProviderKind;
-  baseUrl: string;
-  model: string;
-  apiKey: string;
-  imageModel: string;
-};
-
-type PresentationRecord = {
-  id: string;
-  language: string;
-  title: string;
-  status: "DRAFT" | "PARSING" | "GENERATING_CONTENT" | "RENDERING" | "PREVIEW_READY" | "COMPLETED" | "FAILED";
-  slide_count: number;
-  updated_at: string;
-  template: TemplateId;
-  has_output: boolean;
-  revision: number;
-  last_rendered_revision: number | null;
-  has_unrendered_changes: boolean;
-  failed_stage: string | null;
-  last_error: string | null;
-  can_retry: boolean;
-};
-
-type SourceExtractionItem = {
-  filename: string;
-  status: "success" | "error";
-  char_count: number;
-  error?: string | null;
-};
-
-type RenderAssets = {
-  preview_urls: string[];
-  pptx_url: string;
-  pdf_url: string;
-};
-
-type OutlineItem = {
-  id: string;
-  eyebrow: string;
-  title: string;
-  objective: string;
-  kind: SlideData["kind"];
-};
-
-type PresentationOutline = {
-  title: string;
-  language: string;
-  items: OutlineItem[];
-};
-
-type GenerationJob = {
-  id: string;
-  presentation_id: string;
-  job_type: "outline" | "content";
-  status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELED";
-  stage: string;
-  progress: number;
-  cancel_requested: boolean;
-  error?: string | null;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-  updated_at: string;
-  estimated_duration_seconds: number;
-  estimated_remaining_seconds: number;
-};
-
-type GenerationJobSummary = GenerationJob & {
-  presentation_title: string;
-  presentation_status: PresentationRecord["status"];
-  can_retry: boolean;
-};
-
-type ActiveJob = {
-  id: string;
-  presentationId: string;
-  kind: "outline" | "content";
-};
-
-type PresentationDetail = PresentationRecord & {
-  content: { title: string; language: string; slides: SlideData[] } | null;
-  outline: PresentationOutline | null;
-  preview_urls: string[];
-  pptx_url: string | null;
-  pdf_url: string | null;
-  confirmed_at?: string | null;
-};
-
-type PresentationVersionRecord = {
-  id: string;
-  revision: number;
-  title: string;
-  language: string;
-  template: TemplateId;
-  change_reason: string;
-  created_at: string;
-  slide_count: number;
-};
-
-type PresentationVersionDetail = PresentationVersionRecord & {
-  content: { title: string; language: string; slides: SlideData[] };
-};
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
-
-const providerLabels: Record<ProviderKind, string> = {
-  ollama: "本機 API",
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-  gemini: "Google Gemini",
-  openai_compatible: "OpenAI 相容 API",
-  stable_diffusion: "本機 Stable Diffusion",
-};
-
-const providerBaseUrls: Record<ProviderKind, string> = {
-  ollama: "http://host.docker.internal:11434",
-  openai: "https://api.openai.com/v1",
-  anthropic: "https://api.anthropic.com/v1",
-  gemini: "https://generativelanguage.googleapis.com/v1beta",
-  openai_compatible: "http://host.docker.internal:1234/v1",
-  stable_diffusion: "http://host.docker.internal:7860",
-};
-
-const isTextProvider = (provider: AIProviderOption) => provider.provider !== "stable_diffusion";
-const isImageProvider = (provider: AIProviderOption) => (
-  (provider.provider === "ollama" && Boolean(provider.imageModel))
-  || provider.provider === "stable_diffusion"
-  || provider.provider === "openai"
-  || (provider.provider === "openai_compatible" && Boolean(provider.imageModel))
-);
-
-async function fetchProviderOptions(): Promise<AIProviderOption[]> {
-  const options: AIProviderOption[] = [];
-  const [builtInResult, customResult] = await Promise.allSettled([
-    fetch(`${apiBaseUrl}/ai-provider`),
-    fetch(`${apiBaseUrl}/ai-providers`),
-  ]);
-  if (builtInResult.status === "fulfilled" && builtInResult.value.ok) {
-    const provider = await builtInResult.value.json() as AIProviderResponse;
-    options.push({
-      id: "default",
-      name: "本機預設",
-      provider: provider.provider as ProviderKind,
-      model: provider.model,
-      imageModel: provider.image_model,
-      builtIn: true,
-    });
-  }
-  if (customResult.status === "fulfilled" && customResult.value.ok) {
-    const providers = await customResult.value.json() as Array<{
-      id: string;
-      name: string;
-      provider: ProviderKind;
-      base_url: string;
-      model: string;
-      has_api_key: boolean;
-      image_model: string | null;
-    }>;
-    options.push(...providers.map((provider) => ({
-      id: provider.id,
-      name: provider.name,
-      provider: provider.provider,
-      model: provider.model,
-      baseUrl: provider.base_url,
-      hasApiKey: provider.has_api_key,
-      imageModel: provider.image_model,
-    })));
-  }
-  return options;
-}
+import { makeSlides } from "./default-slides";
+import {
+  apiBaseUrl,
+  fetchProviderOptions,
+  isImageProvider,
+  isTextProvider,
+  providerBaseUrls,
+  providerLabels,
+} from "./provider-options";
+import type {
+  ActiveJob,
+  AIProviderOption,
+  GenerationJob,
+  GenerationJobSummary,
+  OutlineItem,
+  PresentationDetail,
+  PresentationOutline,
+  PresentationRecord,
+  PresentationVersionDetail,
+  PresentationVersionRecord,
+  ProviderDraft,
+  ProviderKind,
+  RenderAssets,
+  SourceExtractionItem,
+  View,
+} from "./types";
 
 const templates = templateCatalog;
-
-function makeSlides(topic: string): SlideData[] {
-  const subject = topic.trim() || "下一個好點子";
-  return [
-    {
-      id: crypto.randomUUID(),
-      eyebrow: "STRATEGY / 2026",
-      title: subject,
-      body: "從複雜資訊中，整理出一條清楚、可行動的敘事路徑。",
-      kind: "cover",
-    },
-    {
-      id: crypto.randomUUID(),
-      eyebrow: "01 / 核心洞察",
-      title: "先聚焦真正重要的三件事",
-      body: "把所有資料收斂成受眾、價值與行動，讓每一頁只傳遞一個核心訊息。",
-      kind: "cards",
-    },
-    {
-      id: crypto.randomUUID(),
-      eyebrow: "02 / 關鍵數字",
-      title: "讓成果一眼就能理解",
-      body: "重要數據不該被藏在段落裡。用清楚的層級讓決策者快速掌握變化。",
-      kind: "metric",
-    },
-    {
-      id: crypto.randomUUID(),
-      eyebrow: "03 / 執行路徑",
-      title: "從今天開始，逐步走到目標",
-      body: "把策略拆成三個可驗證階段，每一階段都有清楚的交付成果。",
-      kind: "roadmap",
-    },
-    {
-      id: crypto.randomUUID(),
-      eyebrow: "NEXT STEP",
-      title: "準備好，把想法變成行動",
-      body: "確認方向、建立第一版，並用真實回饋持續修正。",
-      kind: "closing",
-    },
-  ];
-}
 
 function BrandMark() {
   return (

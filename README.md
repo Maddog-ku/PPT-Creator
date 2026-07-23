@@ -1,6 +1,17 @@
-# PPT Creator 使用說明
+# PPT Creator
+
+[![CI](https://github.com/Maddog-ku/PPT-Creator/actions/workflows/ci.yml/badge.svg)](https://github.com/Maddog-ku/PPT-Creator/actions/workflows/ci.yml)
 
 PPT Creator 會依照主題與參考資料產生簡報。網站先顯示正式 PPTX／PDF 的逐頁渲染結果，使用者確認後才下載檔案。
+
+## 主要能力
+
+- 先確認大綱，再分批生成 3 至 50 頁完整內容。
+- 依內容自動選擇頁型，並提供 10 種視覺模板。
+- 繁體中文／英文介面與深色／淺色模式。
+- 可編輯 PPTX、PDF 與正式逐頁預覽。
+- 可取消、恢復與重試背景任務，並顯示動態預估時間。
+- 任務結束後自動卸載本機文字與圖片模型。
 
 ## 啟動
 
@@ -35,6 +46,8 @@ PostgreSQL 資料與已產生的簡報檔案會保留在 Docker volume 中。
 系統會依每頁內容自動選擇封面、章節轉場、重點卡片、左右圖文、數據焦點、雙欄比較、執行路徑、關鍵引言或結尾版型，並避免同一構圖連續重複。卡片、數據、比較與路線圖會使用各自的結構化內容，不再從同一段內文猜測欄位；使用者仍可在大綱或編輯工作台手動切換頁型。
 
 生成工作會在背景執行，超過 10 頁的內容會均衡分批產生，每批可獨立驗證與重試。重新整理網站後仍可繼續查看進度，也可按下取消並釋放本機模型。
+
+等待畫面會依頁數、圖片數、目前進度與實際執行時間顯示動態 ETA。成功、失敗或取消後，Worker 會清理 Ollama 文字模型、Ollama 圖片模型與本機 Stable Diffusion checkpoint。
 
 ## 預覽與下載
 
@@ -71,3 +84,49 @@ PostgreSQL 資料與已產生的簡報檔案會保留在 Docker volume 中。
 預設使用本機 Ollama API，不需要 API Key，也不會產生雲端費用。設定頁可以保存多個本機或雲端 API，建立簡報時再由使用者自行選擇。
 
 如需完全避免費用，請只選擇本機 Ollama 或本機 Stable Diffusion 類型的 Provider。
+
+## 專案結構
+
+```text
+app/                  前端頁面、偏好、API 型別與 PPTX 建構
+backend/app/          FastAPI、Worker、AI Provider 與渲染服務
+backend/alembic/      PostgreSQL migrations
+backend/tests/        後端測試
+tests/                前端純函式與 SSR 測試
+scripts/              跨平台啟停腳本
+docs/                 架構與模組邊界
+.github/              CI、Dependabot 與 PR 規範
+```
+
+詳細責任與後續拆分順序請見 [架構文件](docs/ARCHITECTURE.md)。
+
+## 開發與測試
+
+前端：
+
+```bash
+npm ci
+npm run check
+```
+
+後端：
+
+```bash
+python -m venv backend/.venv
+source backend/.venv/bin/activate
+python -m pip install -e "./backend[dev]"
+cd backend
+python -m pytest -q
+```
+
+完整容器建置：
+
+```bash
+docker compose build web api worker
+```
+
+貢獻前請閱讀 [CONTRIBUTING.md](CONTRIBUTING.md)；安全問題請依 [SECURITY.md](SECURITY.md) 私下回報。
+
+## 授權
+
+此儲存庫目前尚未指定開源授權。公開前請由專案擁有者選擇合適的授權條款；在授權檔加入前，預設保留所有權利。
