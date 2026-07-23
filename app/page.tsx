@@ -45,6 +45,7 @@ import {
   jobCenterRefreshIntervalMs,
   shouldAutoOpenGenerationResult,
 } from "./job-center";
+import { elapsedSeconds, formatDuration } from "./generation-timing";
 import {
   buildPresentationPptx,
   comparisonFrom,
@@ -150,7 +151,12 @@ type GenerationJob = {
   progress: number;
   cancel_requested: boolean;
   error?: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
   updated_at: string;
+  estimated_duration_seconds: number;
+  estimated_remaining_seconds: number;
 };
 
 type GenerationJobSummary = GenerationJob & {
@@ -637,8 +643,35 @@ function CreateView({
   );
 }
 
-function GeneratingView({ progress, error, sourceStatuses, locale, onBack, onCancel, stage }: { progress: number; error: string | null; sourceStatuses: Record<string, SourceExtractionItem>; locale: AppLocale; onBack: () => void; onCancel: () => void; stage: string }) {
+function GeneratingView({
+  progress,
+  error,
+  sourceStatuses,
+  locale,
+  estimatedRemainingSeconds,
+  startedAt,
+  onBack,
+  onCancel,
+  stage,
+}: {
+  progress: number;
+  error: string | null;
+  sourceStatuses: Record<string, SourceExtractionItem>;
+  locale: AppLocale;
+  estimatedRemainingSeconds: number | null;
+  startedAt: string | null;
+  onBack: () => void;
+  onCancel: () => void;
+  stage: string;
+}) {
   const tr = (text: string) => translate(locale, text);
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (error || progress >= 100) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [error, progress]);
+  const elapsed = elapsedSeconds(startedAt, clock);
   const stages = [
     { label: tr("分析內容與參考資料"), at: 10 },
     { label: tr("整理簡報敘事架構"), at: 35 },
@@ -655,8 +688,15 @@ function GeneratingView({ progress, error, sourceStatuses, locale, onBack, onCan
       <h1>{tr(error ? "無法完成這次生成" : "把內容變成清楚的故事")}</h1>
       <p>{error ?? tr("AI 服務正在整理重點、安排順序，並為每一頁選擇合適的版面。")}</p>
       <div className="progress-card">
-        <div className="progress-heading"><strong>{progress}%</strong><span>{error ? tr("請檢查本機服務") : stage || tr("等待背景任務")}</span></div>
+        <div className="progress-heading"><strong>{progress}%</strong><span>{error ? tr("請檢查本機服務") : tr(stage || "等待背景任務")}</span></div>
         <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>
+        {!error && (
+          <div className="generation-estimate" aria-live="polite">
+            <div><span>{tr("預估剩餘時間")}</span><strong>{estimatedRemainingSeconds === null ? tr("正在計算") : formatDuration(estimatedRemainingSeconds, locale)}</strong></div>
+            <div><span>{tr("已經過時間")}</span><strong>{formatDuration(elapsed, locale)}</strong></div>
+            <p><Sparkles size={13} /> {tr("時間會依模型、頁數與硬體速度動態調整，任務結束後會自動釋放本機模型資源")}</p>
+          </div>
+        )}
         {error ? (
           <div className="generation-error">
             <strong>{tr("請確認後端 API 與 AI 服務都已啟動")}</strong>
@@ -1378,12 +1418,12 @@ function PreviewView({
           <div className="stage-meta"><span>{tr("正式 PPTX / PDF 渲染")}</span><span>{locale === "en" ? `Slide ${active + 1}` : `頁面 ${active + 1}`} / {previewUrls.length || slides.length}</span></div>
           <div className="slide-frame official-preview">
             {rendering ? (
-              <div className="rendering-preview"><LoaderCircle className="spin" size={28} /><strong>{tr("正在重新套用模板")}</strong></div>
+              <div className="rendering-preview"><LoaderCircle className="spin" size={28} /><strong>{tr("正在重新套用模板")}</strong><small>{tr("預估少於 30 秒")}</small></div>
             ) : previewUrls[active] ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img key={`${active}-${animationsEnabled}`} className={animationsEnabled ? "animate-slide-image" : ""} src={resolveApiUrl(previewUrls[active])} alt={`簡報第 ${active + 1} 頁`} />
             ) : (
-              <div className="rendering-preview"><LoaderCircle className="spin" size={28} /><strong>{tr("正在準備正式預覽")}</strong></div>
+              <div className="rendering-preview"><LoaderCircle className="spin" size={28} /><strong>{tr("正在準備正式預覽")}</strong><small>{tr("預估少於 30 秒")}</small></div>
             )}
           </div>
           <div className="slide-controls">
@@ -1694,9 +1734,12 @@ function JobCenterView({
               <div className="job-card-icon">{job.status === "COMPLETED" ? <Check size={18} /> : job.status === "FAILED" || job.status === "CANCELED" ? <X size={18} /> : <LoaderCircle className={job.status === "RUNNING" ? "spin" : ""} size={18} />}</div>
               <div className="job-card-copy">
                 <div><span>{tr(job.job_type === "outline" ? "大綱生成" : "內容生成")}</span><strong>{job.presentation_title}</strong></div>
-                <p>{job.error || stageLabels[job.stage] || job.stage}</p>
+                <p>{job.error || tr(stageLabels[job.stage] || job.stage)}</p>
                 <div className="job-progress"><span style={{ width: `${job.progress}%` }} /></div>
-                <small>{new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(job.updated_at))} · {job.progress}%</small>
+                <small>
+                  {new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(job.updated_at))} · {job.progress}%
+                  {active ? ` · ${tr("預估剩餘")} ${formatDuration(job.estimated_remaining_seconds, locale)}` : ""}
+                </small>
               </div>
               <div className="job-card-status"><span>{statusLabels[job.status]}</span></div>
               <div className="job-card-actions">
@@ -1902,6 +1945,8 @@ export default function Home() {
   const [imageProviderId, setImageProviderId] = useState("");
   const [progress, setProgress] = useState(0);
   const [jobStage, setJobStage] = useState("");
+  const [estimatedRemainingSeconds, setEstimatedRemainingSeconds] = useState<number | null>(null);
+  const [generationStartedAt, setGenerationStartedAt] = useState<string | null>(null);
   const [activeJob, setActiveJob] = useState<ActiveJob | null>(null);
   const [outline, setOutline] = useState<PresentationOutline | null>(null);
   const [slides, setSlides] = useState<SlideData[]>(() => makeSlides(topic));
@@ -1944,6 +1989,8 @@ export default function Home() {
         setPresentationId(restored.presentationId);
         setProgress(5);
         setJobStage("正在恢復背景任務");
+        setEstimatedRemainingSeconds(null);
+        setGenerationStartedAt(null);
         setView("generating");
       }, 0);
       return () => window.clearTimeout(timer);
@@ -2036,13 +2083,17 @@ export default function Home() {
         setGenerationError(null);
         setProgress(job.progress);
         setJobStage(stageLabels[job.stage] || job.stage);
+        setEstimatedRemainingSeconds(job.estimated_remaining_seconds);
+        setGenerationStartedAt(job.started_at || job.created_at);
         if (job.status === "FAILED") {
           clearSavedJob();
+          setEstimatedRemainingSeconds(0);
           setGenerationError(job.error || "背景生成任務失敗");
           return;
         }
         if (job.status === "CANCELED") {
           clearSavedJob();
+          setEstimatedRemainingSeconds(0);
           setGenerationError("這次生成已取消，模型資源已釋放。");
           return;
         }
@@ -2057,6 +2108,7 @@ export default function Home() {
           if (activeJob.kind === "outline") {
             if (!detail.outline) throw new Error("背景任務沒有產生大綱");
             setOutline(detail.outline);
+            setEstimatedRemainingSeconds(0);
             setView((currentView) => shouldAutoOpenGenerationResult(currentView) ? "outline" : currentView);
             clearSavedJob();
             return;
@@ -2065,8 +2117,12 @@ export default function Home() {
           setSlides(detail.content.slides);
           setAssets(null);
           setInitiallyConfirmed(false);
+          setProgress(96);
+          setJobStage("正在渲染正式預覽");
+          setEstimatedRemainingSeconds(30);
           await renderDeck(detail.id, detail.title, detail.content.slides, detail.template);
           setProgress(100);
+          setEstimatedRemainingSeconds(0);
           setView((currentView) => shouldAutoOpenGenerationResult(currentView) ? "preview" : currentView);
           clearSavedJob();
           return;
@@ -2146,6 +2202,8 @@ export default function Home() {
 
   const retryPresentation = async (id: string) => {
     setProgress(20);
+    setEstimatedRemainingSeconds(null);
+    setGenerationStartedAt(new Date().toISOString());
     setGenerationError(null);
     setView("generating");
     try {
@@ -2159,8 +2217,11 @@ export default function Home() {
       setLanguage(detail.language);
       if (detail.failed_stage === "render" && detail.content) {
         setSlides(detail.content.slides);
+        setJobStage("正在渲染正式預覽");
+        setEstimatedRemainingSeconds(30);
         await renderDeck(id, detail.content.title, detail.content.slides, retryTemplate);
         setProgress(100);
+        setEstimatedRemainingSeconds(0);
         setInitiallyConfirmed(false);
         setView("preview");
         return;
@@ -2170,6 +2231,8 @@ export default function Home() {
       if (!response.ok || !job.id) throw new Error(job.detail || "無法重試簡報");
       setProgress(job.progress);
       setJobStage("等待背景工作程序");
+      setEstimatedRemainingSeconds(job.estimated_remaining_seconds);
+      setGenerationStartedAt(job.started_at || job.created_at);
       setActiveJob({ id: job.id, presentationId: id, kind: job.job_type });
     } catch (error) {
       const message = error instanceof Error ? error.message : "無法重試簡報";
@@ -2182,6 +2245,8 @@ export default function Home() {
     event.preventDefault();
     setProgress(3);
     setJobStage("正在準備參考資料");
+    setEstimatedRemainingSeconds(45);
+    setGenerationStartedAt(new Date().toISOString());
     setGenerationError(null);
     setSourceStatuses({});
     setAssets(null);
@@ -2229,6 +2294,8 @@ export default function Home() {
       setPresentationId(result.presentation_id);
       setProgress(result.job.progress);
       setJobStage("等待背景工作程序");
+      setEstimatedRemainingSeconds(result.job.estimated_remaining_seconds);
+      setGenerationStartedAt(result.job.started_at || result.job.created_at);
       setActiveJob({ id: result.job.id, presentationId: result.presentation_id, kind: "outline" });
     } catch (error) {
       const message = error instanceof TypeError
@@ -2256,6 +2323,8 @@ export default function Home() {
     setGenerationError(null);
     setProgress(job.progress);
     setJobStage("等待背景工作程序");
+    setEstimatedRemainingSeconds(job.estimated_remaining_seconds);
+    setGenerationStartedAt(job.started_at || job.created_at);
     setView("generating");
     setActiveJob({ id: job.id, presentationId, kind: "content" });
   };
@@ -2275,6 +2344,8 @@ export default function Home() {
     setPresentationId(job.presentation_id);
     setProgress(job.progress);
     setJobStage(job.stage);
+    setEstimatedRemainingSeconds(job.estimated_remaining_seconds);
+    setGenerationStartedAt(job.started_at || job.created_at);
     setGenerationError(null);
     setActiveJob({ id: job.id, presentationId: job.presentation_id, kind: job.job_type });
     setView("generating");
@@ -2285,6 +2356,9 @@ export default function Home() {
     setActiveJob(null);
     setGenerationError(null);
     setProgress(20);
+    setJobStage("正在準備正式預覽");
+    setEstimatedRemainingSeconds(30);
+    setGenerationStartedAt(new Date().toISOString());
     setView("generating");
     try {
       const response = await fetch(`${apiBaseUrl}/presentations/${id}`);
@@ -2298,6 +2372,7 @@ export default function Home() {
       if (!detail.content && detail.outline) {
         setOutline(detail.outline);
         setProgress(100);
+        setEstimatedRemainingSeconds(0);
         setView("outline");
         return;
       }
@@ -2314,6 +2389,7 @@ export default function Home() {
         await renderDeck(detail.id, detail.title, detail.content.slides, savedTemplate);
       }
       setProgress(100);
+      setEstimatedRemainingSeconds(0);
       setView("preview");
     } catch (error) {
       setGenerationError(error instanceof Error ? error.message : "無法開啟簡報");
@@ -2336,6 +2412,8 @@ export default function Home() {
     setGenerateImages(false);
     setProgress(0);
     setJobStage("");
+    setEstimatedRemainingSeconds(null);
+    setGenerationStartedAt(null);
     setOutline(null);
     setSlides(makeSlides(""));
     setPresentationId(null);
@@ -2357,7 +2435,7 @@ export default function Home() {
       <div className={`app-content ${compactNavigation ? "compact-navigation" : ""}`}>
         {view !== "preview" && <AppHeader locale={preferences.locale} onCreate={resetNewPresentation} />}
         {view === "create" && <CreateView topic={topic} setTopic={setTopic} files={files} setFiles={(nextFiles) => { setFiles(nextFiles); setSourceStatuses({}); }} template={template} setTemplate={setTemplate} language={language} setLanguage={setLanguage} slideCount={slideCount} setSlideCount={setSlideCount} customSlideCount={customSlideCount} setCustomSlideCount={setCustomSlideCount} providerOptions={providerOptions} selectedProviderId={selectedProviderId} setSelectedProviderId={setSelectedProviderId} generateImages={generateImages} setGenerateImages={setGenerateImages} imageProviderId={imageProviderId} setImageProviderId={setImageProviderId} sourceStatuses={sourceStatuses} locale={preferences.locale} onGenerate={startGeneration} />}
-        {view === "generating" && <GeneratingView progress={progress} stage={jobStage} error={generationError} sourceStatuses={sourceStatuses} locale={preferences.locale} onBack={resetNewPresentation} onCancel={() => void cancelActiveGeneration()} />}
+        {view === "generating" && <GeneratingView progress={progress} stage={jobStage} error={generationError} sourceStatuses={sourceStatuses} locale={preferences.locale} estimatedRemainingSeconds={estimatedRemainingSeconds} startedAt={generationStartedAt} onBack={resetNewPresentation} onCancel={() => void cancelActiveGeneration()} />}
         {view === "outline" && outline && <OutlineView outline={outline} locale={preferences.locale} onConfirm={confirmOutline} onBack={resetNewPresentation} />}
         {view === "editor" && <EditorView topic={topic} slides={slides} template={template} presentationId={presentationId} locale={preferences.locale} onSave={saveEditedDeck} onRestore={restorePresentationVersion} onCancel={() => setView("preview")} />}
         {view === "preview" && <PreviewView topic={topic} slides={slides} presentationId={presentationId} template={template} assets={assets} initiallyConfirmed={initiallyConfirmed} rendering={rendering} locale={preferences.locale} onTemplateChange={async (nextTemplate) => { if (!presentationId) return; await renderDeck(presentationId, topic, slides, nextTemplate); }} onBack={() => setView("editor")} />}

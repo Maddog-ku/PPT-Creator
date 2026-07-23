@@ -32,6 +32,23 @@ class LocalImageProviderTests(unittest.IsolatedAsyncioTestCase):
             image = await provider.generate_image("A clean chart")
         self.assertEqual(image, "data:image/png;base64,aW1hZ2U=")
 
+    async def test_releases_checkpoint_memory(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(request.url.path, "/sdapi/v1/unload-checkpoint")
+            self.assertEqual(request.method, "POST")
+            return httpx.Response(200, json={})
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="http://stable-diffusion.test",
+        ) as client:
+            provider = LocalImageProvider(
+                base_url="http://stable-diffusion.test",
+                model="local-checkpoint",
+                client=client,
+            )
+            await provider.release_model()
+
 
 if __name__ == "__main__":
     unittest.main()

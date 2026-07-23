@@ -8,7 +8,7 @@ import uuid
 
 from sqlalchemy import select
 
-from .ai import OllamaProvider
+from .ai import LocalImageProvider, OllamaProvider
 from .config import get_settings
 from .database import SessionLocal, engine
 from .main import DeckGenerationFailure, _generate_deck, _generate_outline, get_ollama_provider
@@ -50,24 +50,79 @@ async def _run_cancellable(job_id: uuid.UUID, operation):
             task.cancel()
 
 
-async def _release_local_text_model(request: GenerationRequest) -> None:
-    provider: OllamaProvider | None = None
-    if request.provider_id is None:
-        provider = get_ollama_provider()
-    else:
+async def _release_local_resources(request: GenerationRequest) -> None:
+    config_ids = {
+        config_id
+        for config_id in (request.provider_id, request.image_provider_id)
+        if config_id is not None
+    }
+    configs: dict[uuid.UUID, AIProviderConfig] = {}
+    if config_ids:
         async with SessionLocal() as session:
-            config = await session.get(AIProviderConfig, request.provider_id)
-        if config is not None and config.provider == "ollama":
+            configs = {
+                config.id: config
+                for config in await session.scalars(
+                    select(AIProviderConfig).where(AIProviderConfig.id.in_(config_ids))
+                )
+            }
+
+    ollama_models: set[tuple[str, str]] = set()
+    stable_diffusion_endpoints: set[tuple[str, str]] = set()
+
+    if request.provider_id is None:
+        ollama_models.add((settings.ollama_base_url, settings.ollama_model))
+    else:
+        text_config = configs.get(request.provider_id)
+        if text_config is not None and text_config.provider == "ollama":
+            ollama_models.add((text_config.base_url, text_config.model))
+
+    if request.generate_images:
+        if request.image_provider_id is None:
+            ollama_models.add(
+                (settings.ollama_base_url, settings.ollama_image_model)
+            )
+        else:
+            image_config = configs.get(request.image_provider_id)
+            if image_config is not None and image_config.provider == "ollama":
+                ollama_models.add(
+                    (
+                        image_config.base_url,
+                        image_config.image_model or image_config.model,
+                    )
+                )
+            elif (
+                image_config is not None
+                and image_config.provider == "stable_diffusion"
+            ):
+                stable_diffusion_endpoints.add(
+                    (image_config.base_url, image_config.model)
+                )
+
+    for base_url, model in ollama_models:
+        try:
             provider = OllamaProvider(
-                base_url=config.base_url,
-                model=config.model,
+                base_url=base_url,
+                model=model,
                 timeout_seconds=settings.ollama_timeout_seconds,
             )
-    if provider is not None:
-        try:
             await provider.release_model()
         except Exception as exc:
-            logger.warning("Unable to explicitly release Ollama model: %s", exc)
+            logger.warning("Unable to release Ollama model %s: %s", model, exc)
+
+    for base_url, model in stable_diffusion_endpoints:
+        try:
+            provider = LocalImageProvider(
+                base_url=base_url,
+                model=model,
+                timeout_seconds=settings.ollama_timeout_seconds,
+            )
+            await provider.release_model()
+        except Exception as exc:
+            logger.warning(
+                "Unable to unload Stable Diffusion checkpoint %s: %s",
+                model,
+                exc,
+            )
 
 
 async def _set_progress(job_id: uuid.UUID, progress: int, stage: str) -> None:
@@ -371,7 +426,7 @@ async def _process_job(job_id: uuid.UUID) -> None:
         logger.exception("Generation job %s failed", job_id)
         await _finish_failed(job_id, job_type, str(exc))
     finally:
-        await _release_local_text_model(request)
+        await _release_local_resources(request)
 
 
 async def _claim_job() -> uuid.UUID | None:

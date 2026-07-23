@@ -96,6 +96,24 @@ class OllamaProviderTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(image, "data:image/png;base64,aW1hZ2U=")
 
+    async def test_releases_a_specific_model(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            payload = json.loads(request.content)
+            self.assertEqual(payload["model"], "x/z-image-turbo")
+            self.assertEqual(payload["keep_alive"], 0)
+            return httpx.Response(200, json={"done": True})
+
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            base_url="http://ollama.test",
+        ) as client:
+            provider = OllamaProvider(
+                base_url="http://ollama.test",
+                model="gpt-oss:20b",
+                client=client,
+            )
+            await provider.release_model("x/z-image-turbo")
+
     async def test_lists_local_models(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             self.assertEqual(request.url.path, "/api/tags")

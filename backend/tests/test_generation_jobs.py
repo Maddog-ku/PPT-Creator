@@ -10,6 +10,7 @@ from app.models import PresentationStatus
 from app.worker import (
     _apply_confirmed_outline,
     _partition_outline,
+    _release_local_resources,
     _request_with_confirmed_outline,
 )
 
@@ -124,3 +125,27 @@ def test_batch_request_preserves_global_page_numbers_without_forcing_boundaries(
     assert batch_request.enforce_deck_boundaries is False
     assert "7. [cards] 現況" in batch_request.topic
     assert "只生成第 7 至 9 頁" in batch_request.topic
+
+
+async def test_releases_default_text_and_image_models(monkeypatch) -> None:
+    released: list[str] = []
+
+    class FakeOllamaProvider:
+        def __init__(self, *, model: str, **_kwargs) -> None:
+            self.model = model
+
+        async def release_model(self) -> None:
+            released.append(self.model)
+
+    monkeypatch.setattr("app.worker.OllamaProvider", FakeOllamaProvider)
+
+    await _release_local_resources(
+        GenerationRequest(
+            topic="資源釋放",
+            slide_count=10,
+            generate_images=True,
+            image_count=2,
+        )
+    )
+
+    assert set(released) == {"gpt-oss:20b", "x/z-image-turbo"}

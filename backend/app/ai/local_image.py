@@ -56,6 +56,10 @@ class LocalImageProvider:
             return str(encoded)
         return f"data:image/png;base64,{encoded}"
 
+    async def release_model(self) -> None:
+        """Unload the active checkpoint and return compute memory to the system."""
+        await self._request("POST", "/sdapi/v1/unload-checkpoint")
+
     async def _request(
         self,
         method: str,

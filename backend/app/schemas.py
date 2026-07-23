@@ -327,6 +327,8 @@ class GenerationJobRead(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     updated_at: datetime
+    estimated_duration_seconds: int
+    estimated_remaining_seconds: int
 
 
 class GenerationJobCreated(BaseModel):

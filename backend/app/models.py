@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
+from .job_timing import estimate_job_duration_seconds, estimate_job_remaining_seconds
 
 
 class PresentationStatus(str, enum.Enum):
@@ -154,3 +155,17 @@ class GenerationJob(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+    @property
+    def estimated_duration_seconds(self) -> int:
+        return estimate_job_duration_seconds(self.job_type, self.payload)
+
+    @property
+    def estimated_remaining_seconds(self) -> int:
+        return estimate_job_remaining_seconds(
+            job_type=self.job_type,
+            payload=self.payload,
+            status=self.status,
+            progress=self.progress,
+            started_at=self.started_at,
+        )

@@ -214,11 +214,16 @@ class OllamaProvider:
         assert validation_error is not None
         raise OllamaProviderError(str(validation_error)) from validation_error
 
-    async def release_model(self) -> None:
+    async def release_model(self, model: str | None = None) -> None:
         await self._request(
             "POST",
             "/api/generate",
-            json_body={"model": self.model, "prompt": "", "stream": False, "keep_alive": 0},
+            json_body={
+                "model": model or self.model,
+                "prompt": "",
+                "stream": False,
+                "keep_alive": 0,
+            },
         )
 
     async def generate_image(self, prompt: str, *, image_model: str) -> str:
