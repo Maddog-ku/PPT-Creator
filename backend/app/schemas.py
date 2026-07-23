@@ -4,7 +4,7 @@ from html import unescape
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .models import PresentationStatus
 
@@ -59,6 +59,73 @@ class HealthRead(BaseModel):
     database: str
 
 
+class SlideItem(BaseModel):
+    label: str = Field(min_length=1, max_length=40)
+    title: str = Field(min_length=1, max_length=80)
+    body: str = Field(min_length=1, max_length=180)
+
+    @field_validator("label", "title", "body", mode="before")
+    @classmethod
+    def normalize_plain_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        plain = re.sub(r"<[^>]+>", " ", value)
+        return " ".join(unescape(plain).split())
+
+
+class SlideMetric(BaseModel):
+    value: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=80)
+    context: str = Field(min_length=1, max_length=180)
+
+    @field_validator("value", "label", "context", mode="before")
+    @classmethod
+    def normalize_plain_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        plain = re.sub(r"<[^>]+>", " ", value)
+        return " ".join(unescape(plain).split())
+
+
+class SlideComparisonSide(BaseModel):
+    label: str = Field(min_length=1, max_length=40)
+    title: str = Field(min_length=1, max_length=80)
+    body: str = Field(min_length=1, max_length=180)
+
+    @field_validator("label", "title", "body", mode="before")
+    @classmethod
+    def normalize_plain_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        plain = re.sub(r"<[^>]+>", " ", value)
+        return " ".join(unescape(plain).split())
+
+
+class SlideComparison(BaseModel):
+    left: SlideComparisonSide
+    right: SlideComparisonSide
+    callout: str = Field(min_length=1, max_length=160)
+
+    @field_validator("callout", mode="before")
+    @classmethod
+    def normalize_plain_text(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        plain = re.sub(r"<[^>]+>", " ", value)
+        return " ".join(unescape(plain).split())
+
+
+def _body_points(body: str, count: int = 3) -> list[str]:
+    points = [
+        item.strip()
+        for item in re.split(r"[。！？；\n]+", body)
+        if item.strip()
+    ][:count]
+    while len(points) < count:
+        points.append(points[-1] if points else body)
+    return points
+
+
 class SlideContent(BaseModel):
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     eyebrow: str = Field(min_length=1, max_length=80)
@@ -75,6 +142,9 @@ class SlideContent(BaseModel):
         "quote",
         "closing",
     ]
+    items: list[SlideItem] = Field(default_factory=list, max_length=4)
+    metric: SlideMetric | None = None
+    comparison: SlideComparison | None = None
     visual_prompt: str | None = Field(default=None, max_length=500)
     image_data: str | None = None
 
@@ -85,6 +155,46 @@ class SlideContent(BaseModel):
             return value
         plain = re.sub(r"<[^>]+>", " ", value)
         return " ".join(unescape(plain).split())
+
+    @model_validator(mode="after")
+    def populate_legacy_structured_content(self) -> "SlideContent":
+        """Upgrade legacy body-only slides without changing stored API contracts."""
+        points = _body_points(self.body)
+        if self.kind == "cards" and not self.items:
+            titles = ("核心洞察", "關鍵訊號", "下一步")
+            self.items = [
+                SlideItem(label=f"0{index + 1}", title=titles[index], body=point)
+                for index, point in enumerate(points)
+            ]
+        elif self.kind == "roadmap" and not self.items:
+            self.items = [
+                SlideItem(
+                    label=f"0{index + 1}",
+                    title=f"第{'一二三'[index]}階段",
+                    body=point,
+                )
+                for index, point in enumerate(points)
+            ]
+        elif self.kind == "metric" and self.metric is None:
+            match = re.search(
+                r"\d[\d,.]*\s*(?:%|×|x|倍)?", f"{self.title} {self.body}", re.I
+            )
+            self.metric = SlideMetric(
+                value=match.group(0).strip() if match else "01",
+                label=points[0],
+                context=self.body,
+            )
+        elif self.kind == "comparison" and self.comparison is None:
+            self.comparison = SlideComparison(
+                left=SlideComparisonSide(
+                    label="BEFORE", title="現況", body=points[0]
+                ),
+                right=SlideComparisonSide(
+                    label="AFTER", title="方向", body=points[1]
+                ),
+                callout=points[2],
+            )
+        return self
 
 
 class GeneratedDeck(BaseModel):
@@ -193,6 +303,7 @@ class GenerationRequest(BaseModel):
     generate_images: bool = False
     image_provider_id: uuid.UUID | None = None
     image_count: int = Field(default=2, ge=1, le=3)
+    enforce_deck_boundaries: bool = True
 
 
 class GenerationResponse(GeneratedDeck):

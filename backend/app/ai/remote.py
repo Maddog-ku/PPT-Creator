@@ -18,6 +18,50 @@ from .base import (
 
 RemoteProviderType = Literal["openai", "anthropic", "gemini", "openai_compatible"]
 
+OPENAI_SLIDE_ITEM_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "label": {"type": "string"},
+        "title": {"type": "string"},
+        "body": {"type": "string"},
+    },
+    "required": ["label", "title", "body"],
+}
+
+OPENAI_METRIC_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "value": {"type": "string"},
+        "label": {"type": "string"},
+        "context": {"type": "string"},
+    },
+    "required": ["value", "label", "context"],
+}
+
+OPENAI_COMPARISON_SIDE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "label": {"type": "string"},
+        "title": {"type": "string"},
+        "body": {"type": "string"},
+    },
+    "required": ["label", "title", "body"],
+}
+
+OPENAI_COMPARISON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "left": OPENAI_COMPARISON_SIDE_SCHEMA,
+        "right": OPENAI_COMPARISON_SIDE_SCHEMA,
+        "callout": {"type": "string"},
+    },
+    "required": ["left", "right", "callout"],
+}
+
 
 OPENAI_DECK_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -48,6 +92,22 @@ OPENAI_DECK_SCHEMA: dict[str, Any] = {
                             "closing",
                         ],
                     },
+                    "items": {
+                        "type": "array",
+                        "items": OPENAI_SLIDE_ITEM_SCHEMA,
+                    },
+                    "metric": {
+                        "anyOf": [
+                            OPENAI_METRIC_SCHEMA,
+                            {"type": "null"},
+                        ]
+                    },
+                    "comparison": {
+                        "anyOf": [
+                            OPENAI_COMPARISON_SCHEMA,
+                            {"type": "null"},
+                        ]
+                    },
                     "visual_prompt": {"type": ["string", "null"]},
                 },
                 "required": [
@@ -55,6 +115,9 @@ OPENAI_DECK_SCHEMA: dict[str, Any] = {
                     "title",
                     "body",
                     "kind",
+                    "items",
+                    "metric",
+                    "comparison",
                     "visual_prompt",
                 ],
             },

@@ -18,6 +18,7 @@ from .schemas import GeneratedDeck, GenerationRequest, PresentationOutline
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+CONTENT_BATCH_MAX_SLIDES = 10
 
 
 class JobCanceled(Exception):
@@ -82,19 +83,33 @@ async def _set_progress(job_id: uuid.UUID, progress: int, stage: str) -> None:
 
 
 def _request_with_confirmed_outline(
-    request: GenerationRequest, outline: PresentationOutline
+    request: GenerationRequest,
+    outline: PresentationOutline,
+    *,
+    page_offset: int = 0,
+    enforce_deck_boundaries: bool = True,
 ) -> GenerationRequest:
     outline_text = "\n".join(
-        f"{index + 1}. [{item.kind}] {item.title}：{item.objective}"
+        f"{page_offset + index + 1}. [{item.kind}] {item.title}：{item.objective}"
         for index, item in enumerate(outline.items)
+    )
+    batch_instruction = (
+        ""
+        if enforce_deck_boundaries
+        else (
+            f"\n這次只生成第 {page_offset + 1} 至 "
+            f"{page_offset + len(outline.items)} 頁。"
+            "不要補上不在本批大綱中的封面、章節或結尾。"
+        )
     )
     return request.model_copy(
         update={
             "topic": (
                 f"{request.topic}\n\n以下是使用者已確認的大綱，頁數、順序、標題與頁型都必須遵守：\n"
-                f"{outline_text}"
+                f"{outline_text}{batch_instruction}"
             ),
             "slide_count": len(outline.items),
+            "enforce_deck_boundaries": enforce_deck_boundaries,
         }
     )
 
@@ -120,6 +135,99 @@ def _apply_confirmed_outline(
             "language": outline.language,
             "slides": slides,
         }
+    )
+
+
+def _partition_outline(
+    outline: PresentationOutline,
+    max_batch_size: int = CONTENT_BATCH_MAX_SLIDES,
+) -> list[tuple[int, PresentationOutline]]:
+    if max_batch_size < 3:
+        raise ValueError("內容批次至少需要容納 3 頁")
+    total = len(outline.items)
+    batch_count = max(1, (total + max_batch_size - 1) // max_batch_size)
+    base_size, extra = divmod(total, batch_count)
+    batches: list[tuple[int, PresentationOutline]] = []
+    offset = 0
+    for batch_index in range(batch_count):
+        size = base_size + (1 if batch_index < extra else 0)
+        items = outline.items[offset : offset + size]
+        batches.append(
+            (
+                offset,
+                outline.model_copy(update={"items": items}),
+            )
+        )
+        offset += size
+    return batches
+
+
+async def _generate_content_in_batches(
+    job_id: uuid.UUID,
+    request: GenerationRequest,
+    outline: PresentationOutline,
+) -> tuple[GeneratedDeck, str, str]:
+    batches = _partition_outline(outline)
+    slides = []
+    provider_type = ""
+    model = ""
+    remaining_images = request.image_count if request.generate_images else 0
+
+    for batch_index, (offset, batch_outline) in enumerate(batches):
+        batch_request = _request_with_confirmed_outline(
+            request,
+            batch_outline,
+            page_offset=offset,
+            enforce_deck_boundaries=len(batches) == 1,
+        ).model_copy(
+            update={
+                "generate_images": remaining_images > 0,
+                "image_count": max(1, remaining_images),
+            }
+        )
+        batch_progress = 20 + int(68 * batch_index / len(batches))
+        await _set_progress(job_id, batch_progress, "generating_content_batch")
+
+        for attempt in range(2):
+            try:
+                generated, provider_type, model = await _run_cancellable(
+                    job_id, _generate_deck(batch_request)
+                )
+                break
+            except DeckGenerationFailure as exc:
+                if attempt == 1 or exc.status_code < 500:
+                    raise
+                logger.warning(
+                    "Content batch %s/%s failed; retrying once: %s",
+                    batch_index + 1,
+                    len(batches),
+                    exc.message,
+                )
+                await _set_progress(
+                    job_id, batch_progress, "retrying_content_batch"
+                )
+
+        batch_deck = _apply_confirmed_outline(generated, batch_outline)
+        slides.extend(batch_deck.slides)
+        remaining_images = max(
+            0,
+            remaining_images
+            - sum(1 for slide in batch_deck.slides if slide.image_data),
+        )
+        await _set_progress(
+            job_id,
+            20 + int(68 * (batch_index + 1) / len(batches)),
+            "generating_content_batch",
+        )
+
+    return (
+        GeneratedDeck(
+            title=outline.title,
+            language=outline.language,
+            slides=slides,
+        ),
+        provider_type,
+        model,
     )
 
 
@@ -247,12 +355,10 @@ async def _process_job(job_id: uuid.UUID) -> None:
             await _complete_outline_job(job_id, outline, provider, model)
         elif job_type == "content":
             outline = PresentationOutline.model_validate(payload["outline"])
-            content_request = _request_with_confirmed_outline(request, outline)
             await _set_progress(job_id, 20, "preparing_content")
             deck, provider, model = await _run_cancellable(
-                job_id, _generate_deck(content_request)
+                job_id, _generate_content_in_batches(job_id, request, outline)
             )
-            deck = _apply_confirmed_outline(deck, outline)
             await _set_progress(job_id, 92, "saving_content")
             await _complete_content_job(job_id, deck, provider, model)
         else:

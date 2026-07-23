@@ -35,15 +35,26 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import type { ChangeEvent, DragEvent, FormEvent } from "react";
+import type { CSSProperties, ChangeEvent, DragEvent, FormEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   isGenerationJobRetryable,
   jobCenterRefreshIntervalMs,
   shouldAutoOpenGenerationResult,
 } from "./job-center";
-import { buildPresentationPptx } from "./presentation-builder";
-import type { SlideData, TemplateId } from "./presentation-builder";
+import {
+  buildPresentationPptx,
+  comparisonFrom,
+  itemsFrom,
+  metricFrom,
+  pointsFrom,
+} from "./presentation-builder";
+import type { SlideData } from "./presentation-builder";
+import {
+  presentationThemes,
+  templateCatalog,
+} from "./templates";
+import type { TemplateId } from "./templates";
 
 type View = "create" | "generating" | "outline" | "editor" | "preview" | "library" | "jobs" | "settings";
 
@@ -236,15 +247,7 @@ async function fetchProviderOptions(): Promise<AIProviderOption[]> {
   return options;
 }
 
-const templates: Array<{
-  id: TemplateId;
-  name: string;
-  description: string;
-}> = [
-  { id: "editorial", name: "創意編輯", description: "明亮、有節奏的品牌提案" },
-  { id: "midnight", name: "深夜科技", description: "高對比的產品與數據簡報" },
-  { id: "paper", name: "紙本報告", description: "安靜、理性的研究型版面" },
-];
+const templates = templateCatalog;
 
 function makeSlides(topic: string): SlideData[] {
   const subject = topic.trim() || "下一個好點子";
@@ -287,20 +290,6 @@ function makeSlides(topic: string): SlideData[] {
   ];
 }
 
-function slidePoints(body: string, count = 3): string[] {
-  const points = body
-    .split(/[。！？；\n]+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, count);
-  while (points.length < count) points.push(points.at(-1) ?? body);
-  return points;
-}
-
-function slideMetric(title: string, body: string): string {
-  return `${title} ${body}`.match(/\d[\d,.]*\s*(?:%|×|x|倍)?/i)?.[0]?.trim() ?? "01";
-}
-
 function BrandMark() {
   return (
     <span className="brand-mark" aria-hidden="true">
@@ -310,7 +299,7 @@ function BrandMark() {
   );
 }
 
-function SideNavigation({ view, onChange }: { view: View; onChange: (view: View) => void }) {
+function SideNavigation({ view, compact, onChange }: { view: View; compact: boolean; onChange: (view: View) => void }) {
   const items = [
     { id: "create" as const, label: "建立簡報", icon: Plus },
     { id: "library" as const, label: "我的簡報", icon: FolderOpen },
@@ -319,7 +308,7 @@ function SideNavigation({ view, onChange }: { view: View; onChange: (view: View)
   ];
 
   return (
-    <aside className="side-navigation" aria-label="主要導覽">
+    <aside className={`side-navigation ${compact ? "compact" : ""}`} aria-label={compact ? "主要導覽（已收合）" : "主要導覽"}>
       <button className="side-logo" onClick={() => onChange("create")} aria-label="PPT Creator 首頁">
         <BrandMark />
       </button>
@@ -775,11 +764,34 @@ function OutlineView({ outline, onConfirm, onBack }: { outline: PresentationOutl
   );
 }
 
-function SlideCanvas({ slide, topic, index = 0, compact = false, animate = false }: { slide: SlideData; topic: string; index?: number; compact?: boolean; animate?: boolean }) {
-  const points = slidePoints(slide.body);
+function SlideCanvas({ slide, topic, template = "editorial", index = 0, compact = false, animate = false }: { slide: SlideData; topic: string; template?: TemplateId; index?: number; compact?: boolean; animate?: boolean }) {
+  const points = pointsFrom(slide.body);
+  const structuredItems = itemsFrom(slide);
+  const structuredMetric = metricFrom(slide);
+  const structuredComparison = comparisonFrom(slide);
+  const theme = presentationThemes[template];
+  const bodyFallback = theme.font.includes("Serif") ? "serif" : "sans-serif";
+  const headingFallback = theme.headingFont.includes("Serif") ? "serif" : "sans-serif";
+  const themeStyle = {
+    "--slide-bg": `#${theme.background}`,
+    "--slide-surface": `#${theme.surface}`,
+    "--slide-text": `#${theme.text}`,
+    "--slide-muted": `#${theme.muted}`,
+    "--slide-accent": `#${theme.accent}`,
+    "--slide-accent-2": `#${theme.accent2}`,
+    "--slide-accent-soft": `#${theme.accentSoft}`,
+    "--slide-line": `#${theme.line}`,
+    "--slide-on-accent": `#${theme.onAccent}`,
+    "--slide-font": `"${theme.font}", ${bodyFallback}`,
+    "--slide-heading-font": `"${theme.headingFont}", ${headingFallback}`,
+  } as CSSProperties;
   const variant = index % 3;
   return (
-    <div className={`slide-canvas slide-${slide.kind} variant-${variant} ${slide.image_data ? "has-image" : ""} ${compact ? "compact" : ""} ${animate ? "animate-slide" : ""}`}>
+    <div
+      className={`slide-canvas slide-${slide.kind} variant-${variant} ${slide.image_data ? "has-image" : ""} ${compact ? "compact" : ""} ${animate ? "animate-slide" : ""}`}
+      data-template={template}
+      style={themeStyle}
+    >
       <div className="slide-chrome">
         <BrandMark />
         <span>PPT CREATOR</span>
@@ -813,8 +825,8 @@ function SlideCanvas({ slide, topic, index = 0, compact = false, animate = false
           <span className="slide-eyebrow">{slide.eyebrow}</span>
           <h2>{slide.title}</h2>
           <div className="insight-cards">
-            {["核心洞察", "關鍵訊號", "下一步"].map((label, pointIndex) => (
-              <div key={label}><span>0{pointIndex + 1}</span><strong>{label}</strong><p>{points[pointIndex]}</p></div>
+            {structuredItems.map((item, pointIndex) => (
+              <div key={`${item.label}-${pointIndex}`}><span>{item.label}</span><strong>{item.title}</strong><p>{item.body}</p></div>
             ))}
           </div>
         </div>
@@ -830,18 +842,18 @@ function SlideCanvas({ slide, topic, index = 0, compact = false, animate = false
       )}
       {slide.kind === "metric" && (
         <div className="slide-layout metric-layout">
-          <div><span className="slide-eyebrow">{slide.eyebrow}</span><h2>{slide.title}</h2><p>{slide.body}</p></div>
-          <div className="big-metric"><strong>{slideMetric(slide.title, slide.body)}</strong><span>{points[0]}</span><i><b /></i></div>
+          <div><span className="slide-eyebrow">{slide.eyebrow}</span><h2>{slide.title}</h2><p>{structuredMetric.context}</p></div>
+          <div className="big-metric"><strong>{structuredMetric.value}</strong><span>{structuredMetric.label}</span><i><b /></i></div>
         </div>
       )}
       {slide.kind === "comparison" && (
         <div className="slide-layout comparison-layout">
           <span className="slide-eyebrow">{slide.eyebrow}</span><h2>{slide.title}</h2>
           <div className="comparison-grid">
-            <div><span>BEFORE</span><strong>現況</strong><p>{points[0]}</p></div>
-            <div><span>AFTER</span><strong>方向</strong><p>{points[1]}</p></div>
+            <div><span>{structuredComparison.left.label}</span><strong>{structuredComparison.left.title}</strong><p>{structuredComparison.left.body}</p></div>
+            <div><span>{structuredComparison.right.label}</span><strong>{structuredComparison.right.title}</strong><p>{structuredComparison.right.body}</p></div>
           </div>
-          <div className="comparison-callout"><b>→</b><span>{points[2]}</span></div>
+          <div className="comparison-callout"><b>→</b><span>{structuredComparison.callout}</span></div>
         </div>
       )}
       {slide.kind === "roadmap" && (
@@ -849,8 +861,8 @@ function SlideCanvas({ slide, topic, index = 0, compact = false, animate = false
           <span className="slide-eyebrow">{slide.eyebrow}</span>
           <h2>{slide.title}</h2>
           <div className="roadmap-line">
-            {["第一階段", "第二階段", "第三階段"].map((label, index) => (
-              <div key={label}><span>{index + 1}</span><strong>{label}</strong><small>{points[index]}</small></div>
+            {structuredItems.map((item, itemIndex) => (
+              <div key={`${item.label}-${itemIndex}`}><span>{item.label}</span><strong>{item.title}</strong><small>{item.body}</small></div>
             ))}
           </div>
         </div>
@@ -899,6 +911,7 @@ const slideKindOptions: Array<{ value: SlideData["kind"]; label: string }> = [
 function EditorView({
   topic,
   slides,
+  template,
   presentationId,
   onSave,
   onRestore,
@@ -906,6 +919,7 @@ function EditorView({
 }: {
   topic: string;
   slides: SlideData[];
+  template: TemplateId;
   presentationId: string | null;
   onSave: (topic: string, slides: SlideData[]) => Promise<void>;
   onRestore: (revision: number) => Promise<void>;
@@ -939,6 +953,32 @@ function EditorView({
 
   const updateActiveSlide = (changes: Partial<SlideData>) => {
     setDraftSlides((current) => current.map((slide, index) => index === active ? { ...slide, ...changes } : slide));
+  };
+
+  const updateActiveItem = (itemIndex: number, changes: Partial<ReturnType<typeof itemsFrom>[number]>) => {
+    if (!activeSlide) return;
+    const items = itemsFrom(activeSlide).map((item, index) => (
+      index === itemIndex ? { ...item, ...changes } : item
+    ));
+    updateActiveSlide({ items });
+  };
+
+  const updateActiveMetric = (changes: Partial<ReturnType<typeof metricFrom>>) => {
+    if (!activeSlide) return;
+    updateActiveSlide({ metric: { ...metricFrom(activeSlide), ...changes } });
+  };
+
+  const updateActiveComparison = (
+    side: "left" | "right" | "callout",
+    changes: string | Partial<ReturnType<typeof comparisonFrom>["left"]>,
+  ) => {
+    if (!activeSlide) return;
+    const comparison = comparisonFrom(activeSlide);
+    updateActiveSlide({
+      comparison: side === "callout"
+        ? { ...comparison, callout: changes as string }
+        : { ...comparison, [side]: { ...comparison[side], ...(changes as object) } },
+    });
   };
 
   const moveSlide = (from: number, to: number) => {
@@ -1089,7 +1129,7 @@ function EditorView({
             >
               <button className="thumbnail-select" onClick={() => setActive(index)} aria-label={`編輯第 ${index + 1} 頁`}>
                 <span>{index + 1}</span>
-                <div><SlideCanvas slide={slide} topic={draftTopic} index={index} compact /></div>
+                <div><SlideCanvas slide={slide} topic={draftTopic} template={template} index={index} compact /></div>
               </button>
               <GripVertical size={14} aria-hidden="true" />
             </div>
@@ -1099,7 +1139,7 @@ function EditorView({
 
         <section className="editor-stage">
           <div className="editor-stage-meta"><span>即時內容預覽</span><span>第 {active + 1} 頁</span></div>
-          <div className="slide-frame">{activeSlide && <SlideCanvas slide={activeSlide} topic={draftTopic} index={active} />}</div>
+          <div className="slide-frame">{activeSlide && <SlideCanvas slide={activeSlide} topic={draftTopic} template={template} index={active} />}</div>
         </section>
 
         <aside className="editor-panel">
@@ -1114,10 +1154,48 @@ function EditorView({
           <label className="editor-field"><span>簡報名稱</span><input value={draftTopic} maxLength={180} onChange={(event) => setDraftTopic(event.target.value)} /></label>
           {activeSlide && (
             <>
-              <label className="editor-field"><span>頁面類型</span><select value={activeSlide.kind} onChange={(event) => updateActiveSlide({ kind: event.target.value as SlideData["kind"] })}>{slideKindOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+              <label className="editor-field"><span>頁面類型</span><select value={activeSlide.kind} onChange={(event) => updateActiveSlide({ kind: event.target.value as SlideData["kind"], items: undefined, metric: null, comparison: null })}>{slideKindOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
               <label className="editor-field"><span>眉標</span><input value={activeSlide.eyebrow} maxLength={80} onChange={(event) => updateActiveSlide({ eyebrow: event.target.value })} /><small>{activeSlide.eyebrow.length} / 80</small></label>
               <label className="editor-field"><span>標題</span><textarea value={activeSlide.title} maxLength={120} rows={3} onChange={(event) => updateActiveSlide({ title: event.target.value })} /><small>{activeSlide.title.length} / 120</small></label>
               <label className="editor-field"><span>內文</span><textarea value={activeSlide.body} maxLength={400} rows={7} onChange={(event) => updateActiveSlide({ body: event.target.value })} /><small>{activeSlide.body.length} / 400</small></label>
+              {(activeSlide.kind === "cards" || activeSlide.kind === "roadmap") && (
+                <div className="editor-structure-section">
+                  <div><strong>{activeSlide.kind === "cards" ? "卡片內容" : "階段內容"}</strong><small>這些欄位會直接呈現在版型中</small></div>
+                  {itemsFrom(activeSlide).map((item, itemIndex) => (
+                    <fieldset key={`${item.label}-${itemIndex}`}>
+                      <legend>項目 {itemIndex + 1}</legend>
+                      <label className="editor-field"><span>標籤</span><input value={item.label} maxLength={40} onChange={(event) => updateActiveItem(itemIndex, { label: event.target.value })} /></label>
+                      <label className="editor-field"><span>小標題</span><input value={item.title} maxLength={80} onChange={(event) => updateActiveItem(itemIndex, { title: event.target.value })} /></label>
+                      <label className="editor-field"><span>說明</span><textarea value={item.body} maxLength={180} rows={3} onChange={(event) => updateActiveItem(itemIndex, { body: event.target.value })} /></label>
+                    </fieldset>
+                  ))}
+                </div>
+              )}
+              {activeSlide.kind === "metric" && (
+                <div className="editor-structure-section">
+                  <div><strong>數據內容</strong><small>數值必須來自可信資料</small></div>
+                  <label className="editor-field"><span>主要數值</span><input value={metricFrom(activeSlide).value} maxLength={40} onChange={(event) => updateActiveMetric({ value: event.target.value })} /></label>
+                  <label className="editor-field"><span>數值標籤</span><input value={metricFrom(activeSlide).label} maxLength={80} onChange={(event) => updateActiveMetric({ label: event.target.value })} /></label>
+                  <label className="editor-field"><span>補充脈絡</span><textarea value={metricFrom(activeSlide).context} maxLength={180} rows={3} onChange={(event) => updateActiveMetric({ context: event.target.value })} /></label>
+                </div>
+              )}
+              {activeSlide.kind === "comparison" && (
+                <div className="editor-structure-section">
+                  <div><strong>比較內容</strong><small>左右欄與最後結論</small></div>
+                  {(["left", "right"] as const).map((side) => {
+                    const column = comparisonFrom(activeSlide)[side];
+                    return (
+                      <fieldset key={side}>
+                        <legend>{side === "left" ? "左欄" : "右欄"}</legend>
+                        <label className="editor-field"><span>標籤</span><input value={column.label} maxLength={40} onChange={(event) => updateActiveComparison(side, { label: event.target.value })} /></label>
+                        <label className="editor-field"><span>欄位標題</span><input value={column.title} maxLength={80} onChange={(event) => updateActiveComparison(side, { title: event.target.value })} /></label>
+                        <label className="editor-field"><span>內容</span><textarea value={column.body} maxLength={180} rows={3} onChange={(event) => updateActiveComparison(side, { body: event.target.value })} /></label>
+                      </fieldset>
+                    );
+                  })}
+                  <label className="editor-field"><span>比較結論</span><textarea value={comparisonFrom(activeSlide).callout} maxLength={160} rows={3} onChange={(event) => updateActiveComparison("callout", event.target.value)} /></label>
+                </div>
+              )}
               {activeSlide.image_data && <button className="quiet-button editor-remove-image" onClick={() => updateActiveSlide({ image_data: null })}><Trash2 size={14} /> 移除這頁圖片</button>}
             </>
           )}
@@ -1558,6 +1636,8 @@ function JobCenterView({
     saving_outline: "正在儲存簡報大綱",
     outline_ready: "簡報大綱已完成",
     preparing_content: "正在產生逐頁內容",
+    generating_content_batch: "正在分批產生逐頁內容",
+    retrying_content_batch: "部分內容未通過驗證，正在重試",
     saving_content: "正在儲存逐頁內容",
     content_ready: "逐頁內容已完成",
     canceling: "正在取消任務",
@@ -1834,6 +1914,8 @@ export default function Home() {
       saving_outline: "正在儲存簡報大綱",
       outline_ready: "大綱已完成",
       preparing_content: "正在準備逐頁內容",
+      generating_content_batch: "正在分批產生逐頁內容",
+      retrying_content_batch: "部分內容未通過驗證，正在重試",
       saving_content: "正在儲存逐頁內容",
       content_ready: "逐頁內容已完成",
       canceling: "正在取消並釋放模型",
@@ -2172,16 +2254,17 @@ export default function Home() {
     if (next === "create") resetNewPresentation();
     else if (next !== "generating" && next !== "preview") setView(next);
   };
+  const compactNavigation = ["generating", "outline", "editor", "preview"].includes(view);
 
   return (
     <div className="app-shell">
-      <SideNavigation view={view} onChange={changeView} />
-      <div className="app-content">
+      <SideNavigation view={view} compact={compactNavigation} onChange={changeView} />
+      <div className={`app-content ${compactNavigation ? "compact-navigation" : ""}`}>
         {view !== "preview" && <AppHeader onCreate={resetNewPresentation} />}
         {view === "create" && <CreateView topic={topic} setTopic={setTopic} files={files} setFiles={(nextFiles) => { setFiles(nextFiles); setSourceStatuses({}); }} template={template} setTemplate={setTemplate} language={language} setLanguage={setLanguage} slideCount={slideCount} setSlideCount={setSlideCount} customSlideCount={customSlideCount} setCustomSlideCount={setCustomSlideCount} providerOptions={providerOptions} selectedProviderId={selectedProviderId} setSelectedProviderId={setSelectedProviderId} generateImages={generateImages} setGenerateImages={setGenerateImages} imageProviderId={imageProviderId} setImageProviderId={setImageProviderId} sourceStatuses={sourceStatuses} onGenerate={startGeneration} />}
         {view === "generating" && <GeneratingView progress={progress} stage={jobStage} error={generationError} sourceStatuses={sourceStatuses} onBack={resetNewPresentation} onCancel={() => void cancelActiveGeneration()} />}
         {view === "outline" && outline && <OutlineView outline={outline} onConfirm={confirmOutline} onBack={resetNewPresentation} />}
-        {view === "editor" && <EditorView topic={topic} slides={slides} presentationId={presentationId} onSave={saveEditedDeck} onRestore={restorePresentationVersion} onCancel={() => setView("preview")} />}
+        {view === "editor" && <EditorView topic={topic} slides={slides} template={template} presentationId={presentationId} onSave={saveEditedDeck} onRestore={restorePresentationVersion} onCancel={() => setView("preview")} />}
         {view === "preview" && <PreviewView topic={topic} slides={slides} presentationId={presentationId} template={template} assets={assets} initiallyConfirmed={initiallyConfirmed} rendering={rendering} onTemplateChange={async (nextTemplate) => { if (!presentationId) return; await renderDeck(presentationId, topic, slides, nextTemplate); }} onBack={() => setView("editor")} />}
         {view === "library" && <LibraryView onCreate={resetNewPresentation} onOpen={openPresentation} onDuplicate={duplicatePresentation} onRetry={retryPresentation} />}
         {view === "jobs" && <JobCenterView onResume={resumeGenerationJob} onOpen={openPresentation} onRetry={retryPresentation} />}

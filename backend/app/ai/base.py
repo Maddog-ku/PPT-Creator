@@ -43,16 +43,26 @@ def exact_array_schema(
 
 def generation_messages(request: GenerationRequest) -> tuple[str, str]:
     reference = request.source_text.strip() if request.source_text else "沒有額外參考資料"
+    boundary_instruction = (
+        "第一頁 kind 必須是 cover，最後一頁必須是 closing。"
+        if request.enforce_deck_boundaries
+        else "這是完整簡報的一個內容批次；每頁 kind 必須遵守需求中指定的大綱，不要自行加入封面或結尾。"
+    )
     system = (
         "你是專業簡報內容編輯。只輸出符合指定 JSON Schema 的內容。"
         "每頁只傳達一個重點，標題簡潔，內文可直接放入簡報。"
         "所有欄位只能使用純文字，不得包含 HTML、Markdown 或項目符號標記。"
-        "第一頁 kind 必須是 cover，最後一頁必須是 closing。"
+        f"{boundary_instruction}"
         "中間頁依內容使用 section、cards、split、metric、comparison、roadmap 或 quote。"
         "section 用於章節轉場，split 用於左右圖文，comparison 用於比較，quote 用於關鍵主張。"
         "請平衡使用不同頁型，相同 kind 不得連續超過兩頁，讓整份簡報有明顯視覺節奏。"
         "每頁標題要能直接說出結論；內文拆成最多三個短句，方便講者掃讀。"
         "metric 只能使用需求或參考資料中確實存在的數字，不得虛構統計值。"
+        "cards 與 roadmap 必須在 items 提供 3 個不重複項目，每項包含 label、title、body。"
+        "metric 必須提供 metric.value、metric.label、metric.context；其餘頁型 metric 設為 null。"
+        "comparison 必須提供 comparison.left、comparison.right 與 callout；"
+        "左右兩側各包含 label、title、body，其餘頁型 comparison 設為 null。"
+        "不使用 items 的頁型將 items 設為空陣列。body 保留該頁的一句摘要，不要拿它取代結構化欄位。"
         "每個中間頁可提供 visual_prompt，描述一張適合該頁、無任何文字的橫式專業圖片；"
         "若該頁不需要圖片則設為 null。image_data 一律設為 null。"
     )
@@ -159,7 +169,10 @@ def parse_generated_deck(content: str, request: GenerationRequest) -> GeneratedD
         raise AIProviderError(
             f"模型回傳 {len(deck.slides)} 頁，預期為 {request.slide_count} 頁"
         )
-    if deck.slides[0].kind != "cover" or deck.slides[-1].kind != "closing":
+    if (
+        request.enforce_deck_boundaries
+        and (deck.slides[0].kind != "cover" or deck.slides[-1].kind != "closing")
+    ):
         raise AIProviderError("模型回傳的封面或結尾頁型不正確")
     return deck
 
